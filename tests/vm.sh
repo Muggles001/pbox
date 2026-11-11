@@ -41,7 +41,6 @@ if [ "${1:-}" = --no-services ]; then
   for id in $PRESET_RECOMMENDED; do : >"$CUR/protocols/$id.env"; pcall "$id" plan; done
   user_new default
   check "下载内核并通过哈希校验" cores_ensure
-  check "Xray 能运行" "$BINDIR/xray" version
   check "sing-box 能运行" "$BINDIR/sing-box" version
   # 逐个实测内置候选，结果只作参考，用来修剪名单
   okc="" badc=""
@@ -53,21 +52,19 @@ if [ "${1:-}" = --no-services ]; then
   check "实测挑选到伪装目标" bash -c '. dist/pbox.sh; d=$(reality_pick) && echo "$d"'
   for id in $(protos_enabled); do (pcall "$id" secrets) || fail=$((fail + 1)); done
   render_all "$ETC/.txn/generated"
-  check "Xray 接受生成的配置" core_validate xray "$ETC/.txn/generated/xray"
   check "sing-box 接受生成的配置" core_validate singbox "$ETC/.txn/generated/sing-box"
   rm -rf /etc/pbox /usr/local/lib/pbox
 else
   check "无人值守安装" $P install --yes
-  check "Xray 服务运行中" systemctl is-active --quiet pbox-xray
   check "sing-box 服务运行中" systemctl is-active --quiet pbox-singbox
-  check "内核不是以 root 运行" bash -c '[ "$(ps -o user= -C xray | head -1)" = pbox ] && [ "$(ps -o user= -C sing-box | head -1)" = pbox ]'
+  check "内核不是以 root 运行" bash -c '[ "$(ps -o user= -C sing-box | head -1)" = pbox ]'
   check "Reality 端口在监听" listening t "$(port_of reality-vision)"
   check "Hysteria2 端口在监听" listening u "$(port_of hysteria2)"
   check "状态目录只有 root 能读" bash -c '[ "$(stat -c %a /etc/pbox/state)" = 700 ]'
   check "入口命令可用" pbox version
-  xpid=$(pgrep -x xray)
+  spid=$(pgrep -x sing-box)
   check "只改 Hysteria2 的端口" $P change hysteria2 port auto --yes
-  check "此时 Xray 没有被重启" bash -c "[ \"\$(pgrep -x xray)\" = '$xpid' ]"
+  check "改端口用的是热重载，内核进程没有换" bash -c "[ \"\$(pgrep -x sing-box)\" = '$spid' ]"
   check "改 Reality 端口后在新端口监听" bash -c "$P change reality-vision port 24443 --yes && sleep 1 && ss -H -lnt | grep -q ':24443 '"
   check "回滚" $P rollback
   check "体检全部通过（含两个协议的节点自测）" $P doctor
@@ -85,9 +82,9 @@ else
   export PBOX_BACKUP_PASSWORD=vm-test
   check "备份" $P backup /tmp/pbox-vm.bin --yes
   check "卸载" $P uninstall --yes
-  check "卸载后无残留" bash -c '! [ -e /etc/pbox ] && ! [ -e /usr/local/lib/pbox ] && ! [ -e /usr/local/bin/pbox ] && ! [ -e /etc/systemd/system/pbox-xray.service ] && ! id pbox 2>/dev/null'
+  check "卸载后无残留" bash -c '! [ -e /etc/pbox ] && ! [ -e /usr/local/lib/pbox ] && ! [ -e /usr/local/bin/pbox ] && ! [ -e /etc/systemd/system/pbox-singbox.service ] && ! id pbox 2>/dev/null'
   check "从备份恢复到干净系统" $P restore /tmp/pbox-vm.bin --yes
-  check "恢复后服务运行中" bash -c 'sleep 1; systemctl is-active --quiet pbox-xray && systemctl is-active --quiet pbox-singbox'
+  check "恢复后服务运行中" bash -c 'sleep 1; systemctl is-active --quiet pbox-singbox'
   $P uninstall --yes >/dev/null 2>&1
 fi
 

@@ -109,10 +109,10 @@ core_validate() { # <内核> <配置目录>，错误信息输出到标准输出
 # Reality 密钥对：输出两行，私钥、公钥。两个内核的输出格式都是第一行私钥、第二行公钥。
 gen_reality_keypair() {
   local out
-  if [ -x "$BINDIR/xray" ]; then
-    out=$("$BINDIR/xray" x25519 2>/dev/null)
-  elif [ -x "$BINDIR/sing-box" ]; then
+  if [ -x "$BINDIR/sing-box" ]; then
     out=$("$BINDIR/sing-box" generate reality-keypair 2>/dev/null)
+  elif [ -x "$BINDIR/xray" ]; then
+    out=$("$BINDIR/xray" x25519 2>/dev/null)
   elif testing; then
     out="PrivateKey: TEST_PRIVATE_$(rand_hex 4)
 PublicKey: TEST_PUBLIC_$(rand_hex 4)"

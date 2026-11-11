@@ -2,7 +2,9 @@ proto_reality_vision_meta() {
   case "$1" in
     title) echo "VLESS-Reality-Vision" ;;
     short) echo "Reality" ;;
-    core) echo xray ;;
+    # 由 sing-box 承载。Xray 自 v26.7.11 起收紧了 Reality 握手，会拒绝 sing-box 与 Mihomo（Clash 系）客户端；
+    # 实测 sing-box 的 Reality 服务端同时接受 Xray、sing-box 两种客户端。
+    core) echo singbox ;;
     l4) echo tcp ;;
   esac
 }
@@ -40,30 +42,28 @@ proto_reality_vision_secrets() {
 }
 
 proto_reality_vision_render_inbound() {
-  local u clients="" sep=""
+  local u users="" sep=""
   for u in $(users_list); do
-    clients="$clients$sep{\"id\": \"$(uget "$u" uuid)\", \"flow\": \"xtls-rprx-vision\", \"email\": \"$u\"}"
+    users="$users$sep{\"name\": \"$u\", \"uuid\": \"$(uget "$u" uuid)\", \"flow\": \"xtls-rprx-vision\"}"
     sep=", "
   done
   cat <<EOF
 {
   "inbounds": [
     {
+      "type": "vless",
       "tag": "reality-vision",
       "listen": "$(listen_addr)",
-      "port": $(pget reality-vision port),
-      "protocol": "vless",
-      "settings": {"clients": [$clients], "decryption": "none"},
-      "streamSettings": {
-        "network": "raw",
-        "security": "reality",
-        "realitySettings": {
-          "show": false,
-          "target": "$(pget reality-vision sni):443",
-          "xver": 0,
-          "serverNames": ["$(pget reality-vision sni)"],
-          "privateKey": "$(pget reality-vision private_key)",
-          "shortIds": ["$(pget reality-vision short_id)"]
+      "listen_port": $(pget reality-vision port),
+      "users": [$users],
+      "tls": {
+        "enabled": true,
+        "server_name": "$(pget reality-vision sni)",
+        "reality": {
+          "enabled": true,
+          "handshake": {"server": "$(pget reality-vision sni)", "server_port": 443},
+          "private_key": "$(pget reality-vision private_key)",
+          "short_id": ["$(pget reality-vision short_id)"]
         }
       }
     }
@@ -122,16 +122,15 @@ proto_reality_vision_selftest() {
   local d p u rc
   d=$(mktemp -d) p=$(random_port tcp) u=$(users_list | head -1)
   cat >"$d/c.json" <<EOF
-{"log": {"loglevel": "none"},
- "inbounds": [{"listen": "127.0.0.1", "port": $p, "protocol": "socks"}],
- "outbounds": [{"protocol": "vless",
-  "settings": {"vnext": [{"address": "127.0.0.1", "port": $(pget reality-vision port),
-    "users": [{"id": "$(uget "$u" uuid)", "flow": "xtls-rprx-vision", "encryption": "none"}]}]},
-  "streamSettings": {"network": "raw", "security": "reality", "realitySettings": {
-    "serverName": "$(pget reality-vision sni)", "fingerprint": "chrome",
-    "publicKey": "$(pget reality-vision public_key)", "shortId": "$(pget reality-vision short_id)"}}}]}
+{"log": {"disabled": true},
+ "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
+ "outbounds": [{"type": "vless", "server": "127.0.0.1", "server_port": $(pget reality-vision port),
+  "uuid": "$(uget "$u" uuid)", "flow": "xtls-rprx-vision",
+  "tls": {"enabled": true, "server_name": "$(pget reality-vision sni)",
+   "utls": {"enabled": true, "fingerprint": "chrome"},
+   "reality": {"enabled": true, "public_key": "$(pget reality-vision public_key)", "short_id": "$(pget reality-vision short_id)"}}}]}
 EOF
-  selftest xray "$d/c.json" "$p"
+  selftest singbox "$d/c.json" "$p"
   rc=$?
   rm -rf "$d"
   return $rc

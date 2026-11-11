@@ -42,8 +42,7 @@ new_root
 check "无人值守安装成功" pbox install --yes
 check "Reality 用 TCP 443" grep -qx 'port=443' "$(E)/state/protocols/reality-vision.env"
 check "Hysteria2 用 UDP 443" grep -qx 'port=443' "$(E)/state/protocols/hysteria2.env"
-check "Xray 基础配置是合法 JSON" json_ok "$(E)/generated/xray/00_base.json"
-check "Reality 入站是合法 JSON" json_ok "$(E)/generated/xray/10_reality-vision.json"
+check "Reality 入站是合法 JSON" json_ok "$(E)/generated/sing-box/10_reality-vision.json"
 check "sing-box 基础配置是合法 JSON" json_ok "$(E)/generated/sing-box/00_base.json"
 check "Hysteria2 入站是合法 JSON" json_ok "$(E)/generated/sing-box/10_hysteria2.json"
 check "sing-box 客户端配置是合法 JSON" json_ok "$(E)/nodes/sing-box.json"
@@ -52,8 +51,10 @@ check "IPv6 地址带方括号" grep -q '@\[2001:db8::10\]:443' "$(E)/nodes/link
 check "Hysteria2 链接带指纹固定且不跳过验证" sh -c "grep hysteria2:// '$(E)/nodes/links.txt' | grep -q pinSHA256= && ! grep -q insecure=1 '$(E)/nodes/links.txt'"
 check "Mihomo 配置含 4 个节点" test "$(grep -c '^    server:' "$(E)/nodes/mihomo.yaml")" -eq 4
 check "自签证书已生成" test -s "$(E)/certs/hysteria2.crt"
-check "默认屏蔽内网地址" grep -q '"10.0.0.0/8"' "$(E)/generated/xray/00_base.json"
+check "默认屏蔽内网地址" grep -q 'ip_is_private' "$(E)/generated/sing-box/00_base.json"
 first_root="$PBOX_ROOT"
+
+check "推荐档只用一个内核" test ! -d "$(E)/generated/xray"
 
 echo "特征审计"
 new_root
@@ -78,15 +79,14 @@ export PBOX_TEST_PORTS=""
 
 echo "修改与回滚"
 check "改端口成功" pbox change reality-vision port 12345 --yes
-check "新端口写入生成的配置" grep -q '"port": 12345' "$(E)/generated/xray/10_reality-vision.json"
+check "新端口写入生成的配置" grep -q '"listen_port": 12345' "$(E)/generated/sing-box/10_reality-vision.json"
 check "链接随之更新" grep -q ':12345?' "$(E)/nodes/links.txt"
-check "只改 Reality 时 sing-box 的生成物不变" diff -r "$(E)/previous/generated/sing-box" "$(E)/generated/sing-box"
 check "预览不落盘" sh -c "bash dist/pbox.sh change reality-vision port 23456 --dry-run --yes && grep -qx port=12345 '$(E)/state/protocols/reality-vision.env'"
 check "回滚到上一份配置" pbox rollback
 check "回滚后端口还原" grep -qx 'port=8443' "$(E)/state/protocols/reality-vision.env"
 check "非法端口被拒绝" sh -c "! bash dist/pbox.sh change reality-vision port 99999 --yes"
 check "删除 Hysteria2 成功" pbox del hysteria2 --yes
-check "删除后不再生成 sing-box 配置" test ! -d "$(E)/generated/sing-box"
+check "删除后不再生成它的入站配置" test ! -e "$(E)/generated/sing-box/10_hysteria2.json"
 check "再删最后一个协议被拒绝" sh -c "! bash dist/pbox.sh del reality-vision --yes"
 check "重新添加 Hysteria2" pbox add hysteria2 --yes
 
@@ -100,9 +100,9 @@ check "merged 属于软冲突，--yes 不代答" sh -c "! bash dist/pbox.sh set 
 check "关闭屏蔽内网属于软冲突，--yes 不代答" sh -c "! bash dist/pbox.sh set block-private off --yes"
 
 echo "自定义片段、重置、备份"
-mkdir -p "$(E)/custom/xray"
-echo '{"log": {"loglevel": "warning"}}' >"$(E)/custom/xray/mine.json"
-check "自定义片段随生成物一起加载" sh -c "bash dist/pbox.sh change hysteria2 port auto --yes && test -f '$(E)/generated/xray/90_custom_mine.json'"
+mkdir -p "$(E)/custom/sing-box"
+echo '{"log": {"level": "warn"}}' >"$(E)/custom/sing-box/mine.json"
+check "自定义片段随生成物一起加载" sh -c "bash dist/pbox.sh change hysteria2 port auto --yes && test -f '$(E)/generated/sing-box/90_custom_mine.json'"
 old_uuid=$(grep ^uuid= "$(E)/state/users/default.env")
 check "重置密钥后 UUID 改变" sh -c "bash dist/pbox.sh reset-keys --yes && ! grep -qx '$old_uuid' '$(E)/state/users/default.env'"
 export PBOX_BACKUP_PASSWORD=test-pass
@@ -156,7 +156,7 @@ new_root
 export PBOX_TEST_NAT=1 PBOX_REALITY_EXT_PORT=31001
 check "只给了 Reality 的外网端口时安装成功" pbox install --yes
 check "链接里是外网端口" grep -q '@203.0.113.10:31001?' "$(E)/nodes/links.txt"
-check "内核监听的仍是内网端口" grep -q '"port": 443' "$(E)/generated/xray/10_reality-vision.json"
+check "内核监听的仍是内网端口" grep -q '"listen_port": 443' "$(E)/generated/sing-box/10_reality-vision.json"
 check "没给外网端口的 Hysteria2 没有安装" test ! -e "$(E)/state/protocols/hysteria2.env"
 check "事后可以修改外网端口" bash -c "bash dist/pbox.sh change reality-vision ext-port 31002 --yes && grep -q ':31002?' '$(E)/nodes/links.txt'"
 unset PBOX_TEST_NAT PBOX_REALITY_EXT_PORT
