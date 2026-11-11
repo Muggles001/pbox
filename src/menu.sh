@@ -60,7 +60,7 @@ choose() {
 }
 
 menu_proto() {
-  local id="$1" n=0 k_port k_sni k_ext k_off
+  local id="$1" n=0 k_port k_sni k_ext k_off k_hop
   while :; do
     menu_header "$(pmeta "$id" title)"
     if ! proto_enabled "$id"; then
@@ -80,6 +80,11 @@ menu_proto() {
     item $n mp_port mp_port_d
     if [ "$id" = reality-vision ]; then n=$((n + 1)) k_sni=$n; item $n mp_sni mp_sni_d; fi
     if [ "$(gget nat 0)" = 1 ]; then n=$((n + 1)) k_ext=$n; item $n mp_ext mp_ext_d; fi
+    k_hop=""
+    if [ "$id" = hysteria2 ] && [ "$(gget nat 0)" != 1 ]; then
+      n=$((n + 1)) k_hop=$n
+      printf "$T_m_fmt" "$n" "$(t mp_hop)" "${C_D}[$(pget hysteria2 hop_range "$(t off)")] $(t mp_hop_d)${C_0}"
+    fi
     n=$((n + 1)) k_off=$n
     item $n mp_disable mp_disable_d
     item 0 m_back m_blank
@@ -95,6 +100,9 @@ menu_proto() {
         if [ -n "$k_sni" ] && [ "$REPLY" = "$k_sni" ]; then
           ask " $(t mp_ask_sni)" ""
           run cmd_change "$id" sni "${REPLY:-auto}"
+        elif [ -n "$k_hop" ] && [ "$REPLY" = "$k_hop" ]; then
+          ask " $(t mp_ask_hop)" "on"
+          run cmd_change "$id" hop "$REPLY"
         elif [ -n "$k_ext" ] && [ "$REPLY" = "$k_ext" ]; then
           ask " $(t mp_ask_ext)" ""
           [ -n "$REPLY" ] && run cmd_change "$id" ext-port "$REPLY"
@@ -137,7 +145,7 @@ menu_addr_mode() {
   item 3 ma_merged ma_merged_d
   item 0 m_back m_blank
   choose
-  case "$REPLY" in 1) mode=split ;; 2) mode=all ;; 3) mode=merged ;; *) return 0 ;; esac
+  case "$REPLY" in 1) mode="split" ;; 2) mode="all" ;; 3) mode="merged" ;; *) return 0 ;; esac
   dom=""
   if [ "$mode" != split ]; then
     ask " $(t mset_ask_domain)" "$(gget domain)"
@@ -151,10 +159,10 @@ menu_settings() {
   while :; do
     menu_header "$(t m_settings)"
     item 1 mset_reset mset_reset_d
-    printf "$T_m_fmt" 2 "$(t mset_addr)" "$C_D[$(gget addr_mode split)]$C_0"
-    printf "$T_m_fmt" 3 "$(t mset_region)" "$C_D[$(gget region -)]$C_0"
-    printf "$T_m_fmt" 4 "$(t mset_block)" "$C_D[$(onoff "$(gget block_private 1)")]$C_0"
-    printf "$T_m_fmt" 5 "$(t mset_upd)" "$C_D[$(onoff "$(gget update_check 1)")]$C_0"
+    printf "$T_m_fmt" 2 "$(t mset_addr)" "${C_D}[$(gget addr_mode split)]${C_0}"
+    printf "$T_m_fmt" 3 "$(t mset_region)" "${C_D}[$(gget region -)]${C_0}"
+    printf "$T_m_fmt" 4 "$(t mset_block)" "${C_D}[$(onoff "$(gget block_private 1)")]${C_0}"
+    printf "$T_m_fmt" 5 "$(t mset_upd)" "${C_D}[$(onoff "$(gget update_check 1)")]${C_0}"
     item 6 mset_fw mset_fw_d
     item 7 mset_lang mset_lang_d
     item 0 m_back m_blank

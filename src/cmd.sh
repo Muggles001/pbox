@@ -47,6 +47,12 @@ show_plan() {
 nat_setup() {
   local id k e
   [ "${NAT4:-0}" = 1 ] || return 0
+  # 网卡上是内网地址有两种可能：一对一映射的云主机（所有端口直通，占多数），
+  # 或只转发指定端口的 NAT 机器。无人值守时只有给了外网端口才按后者处理；交互时问一句，默认不是。
+  if [ -z "$(opt REALITY_EXT_PORT)$(opt HY2_EXT_PORT)" ]; then
+    [ "$ASSUME_YES" = 1 ] && return 0
+    confirm "$(t nat_q)" n || return 0
+  fi
   gset nat 1
   [ "$ASSUME_YES" = 1 ] || { head1 "$(t nat_title)"; say "$(t nat_explain)"; }
   for id in $(protos_enabled); do
@@ -162,6 +168,7 @@ do_uninstall() {
   if [ -f "$MANIFEST" ]; then
     grep '^svc	' "$MANIFEST" | cut -f2 | while read -r val; do svc_remove "$val"; done
     grep '^fw	' "$MANIFEST" | cut -f2 | while read -r val; do fw_close "${val% *}" "${val#* }"; done
+    grep -q '^hop	' "$MANIFEST" && hop_clear
     grep -E '^(file|dir|user)	' "$MANIFEST" | while IFS='	' read -r kind val; do
       case "$kind" in
         file) rm -f "$val" ;;
@@ -197,6 +204,7 @@ edit_end() {
   cores_ensure || { txn_abort; die "$(t dl_abort)"; }
   txn_commit || die "$(t apply_fail)"
   [ "$DRY_RUN" = 1 ] && return 0
+  hop_apply || warn "$(t hop_fail)"
   fw_sync
   nodes_write
   say "${C_G}$(t applied)${C_0}"
@@ -243,6 +251,10 @@ cmd_change() {
       [ "$val" = auto ] && val=$(random_port "$l4")
       valid_port "$val" || { txn_abort; die "$(t bad_port "$val")"; }
       pset "$id" port "$val"
+      ;;
+    hop)
+      [ "$id" = hysteria2 ] || { txn_abort; die "$(t change_usage)"; }
+      hop_set "$val"
       ;;
     ext-port)
       valid_port "$val" || { txn_abort; die "$(t bad_port "$val")"; }
@@ -359,6 +371,8 @@ cmd_rollback() {
   detect_sys
   lock
   rollback || die "$(t rollback_none)"
+  hop_apply
+  fw_sync
   nodes_write
   say "$(t rolled_back)"
 }
@@ -408,6 +422,7 @@ pbox $PBOX_VERSION
   pbox add <proto> [port]   pbox del <proto>
   pbox change <proto> port <n|auto>
   pbox change <proto> ext-port <n>
+  pbox change hysteria2 hop <on|off|A-B>
   pbox change reality-vision sni <domain|auto>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]

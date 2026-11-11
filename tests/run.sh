@@ -131,6 +131,20 @@ check "主菜单能画出来并正常退出" bash -c "printf '0\n' | bash dist/p
 check "进协议管理、进某个协议、逐级返回" bash -c "printf '3\n1\n0\n0\n0\n' | bash dist/pbox.sh >/dev/null"
 check "进设置再返回" bash -c "printf '4\n0\n0\n' | bash dist/pbox.sh >/dev/null"
 
+echo "端口跳跃"
+check "开启端口跳跃" pbox change hysteria2 hop 30000-30999 --yes
+check "链接里带上跳跃范围" grep -q ':443,30000-30999/' "$(E)/nodes/links.txt"
+check "客户端配置仍是合法 JSON" json_ok "$(E)/nodes/sing-box.json"
+check "范围盖住自己的端口时被拒绝" bash -c "! bash dist/pbox.sh change hysteria2 hop 400-500 --yes"
+check "关闭端口跳跃" bash -c "bash dist/pbox.sh change hysteria2 hop off --yes && ! grep -q 30000 '$(E)/nodes/links.txt'"
+
+echo "内网地址的云主机"
+new_root
+export PBOX_TEST_NAT=1
+check "无人值守且没给外网端口时，按普通云主机安装" pbox install --yes
+check "两个协议都装上了" test -e "$(E)/state/protocols/hysteria2.env"
+unset PBOX_TEST_NAT
+
 echo "NAT 机器"
 new_root
 export PBOX_TEST_NAT=1 PBOX_REALITY_EXT_PORT=31001

@@ -36,6 +36,7 @@ main() {
     restore) cmd_restore "$@" ;;
     update) cmd_update ;;
     post-update) cmd_post_update ;;
+    hop-apply) need_root; need_installed; detect_sys; hop_apply ;;
     uninstall) cmd_uninstall ;;
     lang) cmd_lang ;;
     version | -v | --version) echo "$PBOX_VERSION" ;;

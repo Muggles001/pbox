@@ -10,7 +10,10 @@ fw_backend() {
   fi
 }
 
-fw_is_open() { # <后端> <端口/协议>
+fw_is_open() { # <后端> <端口/协议>，端口可以是 起:止
+  case "$1" in
+    firewalld) firewall-cmd --query-port="$(printf '%s' "$2" | tr : -)" >/dev/null 2>&1; return ;;
+  esac
   case "$1" in
     ufw) ufw status | grep -Eq "^${2}[[:space:]]+ALLOW" ;;
     firewalld) firewall-cmd --query-port="$2" >/dev/null 2>&1 ;;
@@ -21,21 +24,24 @@ fw_is_open() { # <后端> <端口/协议>
 fw_open() {
   case "$1" in
     ufw) ufw allow "$2" comment pbox >/dev/null ;;
-    firewalld) firewall-cmd --permanent --add-port="$2" >/dev/null && firewall-cmd --reload >/dev/null ;;
+    firewalld) firewall-cmd --permanent --add-port="$(printf '%s' "$2" | tr : -)" >/dev/null && firewall-cmd --reload >/dev/null ;;
   esac && manifest_add fw "$1 $2"
 }
 
 fw_close() {
   case "$1" in
     ufw) ufw delete allow "$2" >/dev/null 2>&1 ;;
-    firewalld) firewall-cmd --permanent --remove-port="$2" >/dev/null 2>&1 && firewall-cmd --reload >/dev/null ;;
+    firewalld) firewall-cmd --permanent --remove-port="$(printf '%s' "$2" | tr : -)" >/dev/null 2>&1 && firewall-cmd --reload >/dev/null ;;
   esac
   manifest_del fw "$1 $2"
 }
 
 ports_wanted() {
-  local id
+  local id r
   for id in $(protos_enabled); do echo "$(pget "$id" port)/$(pmeta "$id" l4)"; done
+  r=$(pget hysteria2 hop_range)
+  [ -n "$r" ] && echo "${r%-*}:${r#*-}/udp"
+  return 0
 }
 
 # 放行当前需要的端口（先询问），并撤销 pbox 以前放行、现在不再使用的端口。

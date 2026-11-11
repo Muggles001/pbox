@@ -65,6 +65,7 @@ cmd_restore() {
   rm -rf "$tmp"
   txn_commit || die "$(t apply_fail)"
   self_install
+  hop_apply
   fw_sync
   nodes_write
   nodes_show

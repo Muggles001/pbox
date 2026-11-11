@@ -60,7 +60,7 @@ proto_hysteria2_share_link() {
   local tail="pinSHA256=$(pget hysteria2 cert_sha256)"
   [ "${4:-}" = insecure ] && tail="insecure=1"
   printf 'hysteria2://%s@%s:%s/?sni=%s&%s#%s\n' \
-    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport hysteria2)" "$(pget hysteria2 sni)" "$tail" "$3"
+    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport hysteria2)$(hop_suffix)" "$(pget hysteria2 sni)" "$tail" "$3"
 }
 
 proto_hysteria2_client_singbox() {
@@ -70,6 +70,7 @@ proto_hysteria2_client_singbox() {
       "tag": "$3",
       "server": "$2",
       "server_port": $(pubport hysteria2),
+      $(hop_singbox)
       "password": "$(uget "$1" password)",
       "tls": {
         "enabled": true,
@@ -87,6 +88,7 @@ proto_hysteria2_client_mihomo() {
     type: hysteria2
     server: "$2"
     port: $(pubport hysteria2)
+    $(hop_mihomo)
     password: "$(uget "$1" password)"
     sni: "$(pget hysteria2 sni)"
     alpn: [h3]
@@ -118,6 +120,15 @@ proto_hysteria2_doctor() {
     bad "$(t d_self_bad Hysteria2)"
     hint "pbox log"
     return 1
+  fi
+  if [ -n "$(pget hysteria2 hop_range)" ]; then
+    if hop_active; then
+      ok "$(t d_hop_ok "$(pget hysteria2 hop_range)")"
+    else
+      bad "$(t d_hop_bad)"
+      hint "pbox hop-apply"
+      return 1
+    fi
   fi
   if cert_valid_days "$CERTS/hysteria2.crt" 30; then
     ok "$(t d_cert_ok Hysteria2)"

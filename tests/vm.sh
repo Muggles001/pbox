@@ -79,6 +79,9 @@ else
   chmod 600 /etc/resolv.conf
   check "解析配置只有 root 可读时，重新生效后节点仍然可用" bash -c "$P change hysteria2 port auto --yes && sleep 2 && $P doctor"
   chmod 644 /etc/resolv.conf
+  check "开启端口跳跃后转发规则存在" bash -c "$P change hysteria2 hop on --yes && (nft list table inet pbox_hop || iptables -t nat -S PREROUTING | grep pbox-hop)"
+  check "开启端口跳跃后体检仍全过" $P doctor
+  check "关闭端口跳跃后规则消失" bash -c "$P change hysteria2 hop off --yes && ! nft list table inet pbox_hop 2>/dev/null && ! (iptables -t nat -S PREROUTING 2>/dev/null | grep -q pbox-hop)"
   export PBOX_BACKUP_PASSWORD=vm-test
   check "备份" $P backup /tmp/pbox-vm.bin --yes
   check "卸载" $P uninstall --yes
