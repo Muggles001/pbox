@@ -33,14 +33,19 @@ reality_check() {
 # 随机顺序实测候选，凑够 5 个可用的就停，从最快的 3 个里随机取一个。
 # 不设尝试上限：候选的通过率因机房而异，设了上限就会偶尔一个都挑不到。
 reality_pick() {
-  local d tm passed="" n=0
+  local d tm passed="" n=0 round
   if testing && [ -n "${PBOX_TEST_SNI:-}" ]; then echo "$PBOX_TEST_SNI"; return 0; fi
-  for d in $(reality_candidates | shuffle); do
-    tm=$(reality_check "$d") || continue
-    passed="$passed$tm $d
+  # 网络一时抖动可能让整轮都测不过，所以一个都没挑到时再来一轮
+  for round in 1 2; do
+    for d in $(reality_candidates | shuffle); do
+      tm=$(reality_check "$d") || continue
+      passed="$passed$tm $d
 "
-    n=$((n + 1))
-    [ "$n" -ge 5 ] && break
+      n=$((n + 1))
+      [ "$n" -ge 5 ] && break
+    done
+    [ "$n" -gt 0 ] && break
+    sleep 3
   done
   [ "$n" -gt 0 ] || return 1
   printf '%s' "$passed" | sort -n | head -3 | shuffle | head -1 | awk '{print $2}'

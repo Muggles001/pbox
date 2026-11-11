@@ -113,8 +113,14 @@ selftest() {
     singbox) "$b" run -c "$2" -D "$(dirname "$2")" >/dev/null 2>&1 & ;;
   esac
   pid=$!
-  sleep 2
-  curl -s -o /dev/null -m 12 -x "socks5h://127.0.0.1:$3" https://www.cloudflare.com/cdn-cgi/trace && rc=0
+  # 内核刚重启时可能还没准备好，所以最多试三次，而不是一次失败就判定节点坏了
+  for _ in 1 2 3; do
+    sleep 2
+    if curl -s -o /dev/null -m 10 -x "socks5h://127.0.0.1:$3" https://www.cloudflare.com/cdn-cgi/trace; then
+      rc=0
+      break
+    fi
+  done
   kill "$pid" 2>/dev/null
   wait "$pid" 2>/dev/null
   return $rc
