@@ -139,15 +139,3 @@ proto_hysteria2_doctor() {
     return 1
   fi
 }
-
-# Surge 的节点写法，证书用指纹固定。未在真机上验证过。
-proto_hysteria2_client_surge() {
-  local r hop=""
-  r=$(pget hysteria2 hop_range)
-  [ -n "$r" ] && hop=", port-hopping=\"$r\""
-  printf '%s = hysteria2, %s, %s, password=%s, sni=%s, server-cert-fingerprint-sha256=%s%s\n' \
-    "$3" "$2" "$(pubport hysteria2)" "$(uget "$1" password)" "$(pget hysteria2 sni)" "$(pget hysteria2 cert_sha256)" "$hop"
-}
-
-# Quantumult X 不支持 Hysteria2
-proto_hysteria2_client_qx() { :; }

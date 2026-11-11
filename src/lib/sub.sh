@@ -7,10 +7,7 @@
 # 这样订阅地址泄露时，别人能读到节点，但改不了订阅内容。
 
 # 文件名不带扩展名，省去在接口路径里转义的麻烦
-SUB_FILES="v2ray clash singbox surge qx"
-
-_node_surge() { pcall "$1" client_surge "$2" "$3" "$4"; }
-_node_qx() { pcall "$1" client_qx "$2" "$3" "$4"; }
+SUB_FILES="v2ray clash singbox"
 
 # 由 nodes_write 调用：每次节点有变化都重新生成
 sub_build() {
@@ -19,8 +16,7 @@ sub_build() {
   openssl base64 -A <"$NODES/links.txt" >"$d/v2ray"
   cp "$NODES/mihomo.yaml" "$d/clash"
   cp "$NODES/sing-box.json" "$d/singbox"
-  node_each _node_surge >"$d/surge"
-  node_each _node_qx >"$d/qx"
+  rm -f "$d/surge" "$d/qx"
 }
 
 sub_get() { kv_get "$STATE/global.env" "sub_$1" "${2:-}"; }
@@ -73,8 +69,6 @@ sub_show() {
   printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_v2ray)" "$C_0" "$(sub_url v2ray)"
   printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_clash)" "$C_0" "$(sub_url clash)"
   printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_singbox)" "$C_0" "$(sub_url singbox)"
-  printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_surge)" "$C_0" "$(sub_url surge)"
-  printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_qx)" "$C_0" "$(sub_url qx)"
   note "$(t sub_url_note)"
 }
 

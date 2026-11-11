@@ -257,8 +257,6 @@ i18n_en() {
   T_sub_c_v2ray='Universal (v2rayN, v2rayNG, Shadowrocket, Loon, NekoBox, Hiddify)'
   T_sub_c_clash='Clash family (Mihomo, Clash Verge, FlClash, Stash)'
   T_sub_c_singbox='sing-box'
-  T_sub_c_surge='Surge (Hysteria2 only; format not verified on a device)'
-  T_sub_c_qx='Quantumult X (Reality only; format not verified on a device)'
   T_sub_url_note='A subscription link is as good as the nodes themselves; keep it private. If it leaks, revoke the read token on GitLab and the old link stops working.'
   T_h_menu='open the menu'
   T_h_yes='ask nothing and use defaults; stop with an error on conflicts'

@@ -257,8 +257,6 @@ i18n_zh() {
   T_sub_c_v2ray='通用（v2rayN、v2rayNG、Shadowrocket、Loon、NekoBox、Hiddify）'
   T_sub_c_clash='Clash 系（Mihomo、Clash Verge、FlClash、Stash）'
   T_sub_c_singbox='sing-box'
-  T_sub_c_surge='Surge（只含 Hysteria2；写法未经实测）'
-  T_sub_c_qx='Quantumult X（只含 Reality；写法未经实测）'
   T_sub_url_note='订阅地址等同于节点本身，不要发到公开场合。泄露后到 GitLab 撤销只读令牌，旧地址即失效。'
   T_h_menu='打开菜单'
   T_h_yes='不提问，全部采用默认值；遇到冲突时直接报错退出'
