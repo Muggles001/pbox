@@ -110,7 +110,9 @@ run_user_create() {
 # 读不到它就解析不了任何域名，表现为端口在监听但所有连接超时。
 runuser_reads_dns() {
   testing && return 0
-  su -s /bin/sh "$RUN_USER" -c 'test -r /etc/resolv.conf' 2>/dev/null
+  # 看文件是否对所有人可读。不用 su 去试读：那会给专用账号开一个登录会话，
+  # 残留的会话进程会让卸载时删不掉这个账号。
+  [ -n "$(find -L /etc/resolv.conf -maxdepth 0 -perm -004 2>/dev/null)" ]
 }
 
 # 不改动系统文件：复制一份给内核，由服务文件把它映射成内核自己看到的 /etc/resolv.conf。

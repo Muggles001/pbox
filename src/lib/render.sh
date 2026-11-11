@@ -70,21 +70,25 @@ validate_all() { # <目录>
 }
 
 # 让一个内核按 $GEN 的现状生效；不再需要的内核停掉。
+# core_sync <内核> <配置是否有变化 0|1>
+# 服务文件每次都重写：运行环境的变化（例如解析配置的映射）对所有内核都有效，
+# 不能只处理这次配置有变化的那个。但只有确实有变化时才重载或重启，其余内核不受打扰。
 core_sync() {
-  local core="$1" n
+  local core="$1" cfg="${2:-1}" n
   n=$(core_svc "$core")
-  if [ -d "$GEN/$(core_dir "$core")" ]; then
-    # 每次都重写服务文件，这样运行环境的变化（例如解析配置的映射）能跟上
-    svc_write "$n" "$(core_cmd "$core")" "$([ "$core" = singbox ] && echo 1 || echo 0)"
-    svc enable "$n"
-    if svc active "$n"; then
-      # sing-box 支持热重载，连接不断；Xray 只能重启。服务文件变了则一律重启。
-      [ "$core" = singbox ] && [ "$UNIT_CHANGED" = 0 ] && svc reload "$n" 2>/dev/null || svc restart "$n"
-    else
-      svc start "$n"
-    fi
-  else
+  if [ ! -d "$GEN/$(core_dir "$core")" ]; then
     testing || svc_remove "$n"
+    return 0
+  fi
+  svc_write "$n" "$(core_cmd "$core")" "$([ "$core" = singbox ] && echo 1 || echo 0)"
+  svc enable "$n"
+  if ! svc active "$n"; then
+    svc start "$n"
+  elif [ "${UNIT_CHANGED:-0}" = 1 ]; then
+    svc restart "$n"
+  elif [ "$cfg" = 1 ]; then
+    # sing-box 支持热重载，连接不断；Xray 只能重启。
+    [ "$core" = singbox ] && svc reload "$n" 2>/dev/null || svc restart "$n"
   fi
 }
 
@@ -150,7 +154,9 @@ txn_commit() {
   CUR="$STATE"
   manifest_add dir "$ETC"
   fix_perms
-  for core in $changed; do core_sync "$core"; done
+  for core in xray singbox; do
+    case " $changed " in *" $core "*) core_sync "$core" 1 ;; *) core_sync "$core" 0 ;; esac
+  done
   if ! probe; then
     if rollback; then warn "$(t rolled_back)"; elif [ "${FRESH:-0}" != 1 ]; then warn "$(t rollback_none)"; fi
     return 1

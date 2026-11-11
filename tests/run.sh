@@ -133,7 +133,7 @@ check "进设置再返回" bash -c "printf '4\n0\n0\n' | bash dist/pbox.sh >/dev
 
 echo "端口跳跃"
 check "开启端口跳跃" pbox change hysteria2 hop 30000-30999 --yes
-check "链接里带上跳跃范围" grep -q ':443,30000-30999/' "$(E)/nodes/links.txt"
+check "链接里带上跳跃范围" grep -q ':443/?.*&mport=30000-30999#' "$(E)/nodes/links.txt"
 check "客户端配置仍是合法 JSON" json_ok "$(E)/nodes/sing-box.json"
 check "范围盖住自己的端口时被拒绝" bash -c "! bash dist/pbox.sh change hysteria2 hop 400-500 --yes"
 check "关闭端口跳跃" bash -c "bash dist/pbox.sh change hysteria2 hop off --yes && ! grep -q 30000 '$(E)/nodes/links.txt'"

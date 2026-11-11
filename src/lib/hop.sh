@@ -84,7 +84,9 @@ EOF
 }
 
 # 写进分享链接和客户端配置的片段
-hop_suffix() { local r; r=$(pget hysteria2 hop_range); [ -n "$r" ] && printf ',%s' "$r"; return 0; }
+# 链接里用 mport 参数表示跳跃范围：v2rayNG 等常见客户端认这种写法。
+# Hysteria 官方的"端口,范围"写法它们会判为无效配置；不认 mport 的客户端会忽略它，仍可用主端口连接。
+hop_query() { local r; r=$(pget hysteria2 hop_range); [ -n "$r" ] && printf '&mport=%s' "$r"; return 0; }
 hop_singbox() { local r; r=$(pget hysteria2 hop_range); [ -n "$r" ] && printf '"server_ports": ["%s:%s"],' "${r%-*}" "${r#*-}"; return 0; }
 hop_mihomo() { local r; r=$(pget hysteria2 hop_range); [ -n "$r" ] && printf 'ports: %s' "$r"; return 0; }
 

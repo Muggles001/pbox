@@ -59,8 +59,9 @@ EOF
 proto_hysteria2_share_link() {
   local tail="pinSHA256=$(pget hysteria2 cert_sha256)"
   [ "${4:-}" = insecure ] && tail="insecure=1"
+  tail="$tail$(hop_query)"
   printf 'hysteria2://%s@%s:%s/?sni=%s&%s#%s\n' \
-    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport hysteria2)$(hop_suffix)" "$(pget hysteria2 sni)" "$tail" "$3"
+    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport hysteria2)" "$(pget hysteria2 sni)" "$tail" "$3"
 }
 
 proto_hysteria2_client_singbox() {
