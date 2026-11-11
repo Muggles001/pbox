@@ -228,6 +228,30 @@ menu_log() {
   done
 }
 
+menu_sub() {
+  while :; do
+    menu_header "$(t m_sub)"
+    if sub_enabled; then
+      printf '  %s%s  %s%s\n\n' "$C_D" "$(t msub_on)" "$(sub_get project)" "$C_0"
+    else
+      printf '  %s%s%s\n\n' "$C_D" "$(t msub_none)" "$C_0"
+    fi
+    item 1 msub_setup msub_setup_d
+    item 2 msub_show msub_show_d
+    item 3 msub_push msub_push_d
+    item 4 msub_off msub_off_d
+    item 0 m_back m_blank
+    choose
+    case "$REPLY" in
+      1) run cmd_sub setup ;;
+      2) run cmd_sub show ;;
+      3) run cmd_sub push ;;
+      4) run cmd_sub off ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
 cmd_menu() {
   need_root
   if [ ! -d "$STATE" ]; then
@@ -241,22 +265,24 @@ cmd_menu() {
     item 1 m_nodes m_nodes_d
     item 2 m_doctor m_doctor_d
     item 3 m_protocols m_protocols_d
-    item 4 m_settings m_settings_d
-    item 5 m_update m_update_d
-    item 6 m_backup m_backup_d
-    item 7 m_log m_log_d
-    item 8 m_uninstall m_uninstall_d
+    item 4 m_sub m_sub_d
+    item 5 m_settings m_settings_d
+    item 6 m_update m_update_d
+    item 7 m_backup m_backup_d
+    item 8 m_log m_log_d
+    item 9 m_uninstall m_uninstall_d
     item 0 m_exit m_blank
     choose
     case "$REPLY" in
       1) run cmd_nodes ;;
       2) run cmd_doctor ;;
       3) menu_protocols ;;
-      4) menu_settings ;;
-      5) run cmd_update ;;
-      6) menu_backup ;;
-      7) menu_log ;;
-      8)
+      4) menu_sub ;;
+      5) menu_settings ;;
+      6) run cmd_update ;;
+      7) menu_backup ;;
+      8) menu_log ;;
+      9)
         echo
         (cmd_uninstall)
         [ -d "$STATE" ] || return 0

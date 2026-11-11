@@ -207,6 +207,7 @@ edit_end() {
   hop_apply || warn "$(t hop_fail)"
   fw_sync
   nodes_write
+  sub_push || warn "$(t sub_push_fail)"
   say "${C_G}$(t applied)${C_0}"
   note "$(t links_changed)"
 }
@@ -428,6 +429,7 @@ pbox $PBOX_VERSION
   pbox set addr-mode <split|merged|all> [domain]
   pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
+  pbox sub [setup|show|push|off]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE
   pbox update   pbox uninstall   pbox lang

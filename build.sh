@@ -21,6 +21,7 @@ src/lib/render.sh
 src/lib/firewall.sh
 src/lib/hop.sh
 src/lib/nodes.sh
+src/lib/sub.sh
 src/lib/doctor.sh
 src/lib/backup.sh
 src/lib/update.sh

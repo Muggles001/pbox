@@ -131,6 +131,14 @@ check "主菜单能画出来并正常退出" bash -c "printf '0\n' | bash dist/p
 check "进协议管理、进某个协议、逐级返回" bash -c "printf '3\n1\n0\n0\n0\n' | bash dist/pbox.sh >/dev/null"
 check "进设置再返回" bash -c "printf '4\n0\n0\n' | bash dist/pbox.sh >/dev/null"
 
+echo "订阅文件"
+check "通用订阅解码后就是全部链接" bash -c "openssl base64 -d -A <'$(E)/nodes/sub/v2ray' | diff - '$(E)/nodes/links.txt'"
+check "Clash 与 sing-box 订阅文件已生成" bash -c "test -s '$(E)/nodes/sub/clash' && python3 -m json.tool '$(E)/nodes/sub/singbox'"
+check "Surge 订阅只含 Hysteria2" bash -c "grep -q '= hysteria2,' '$(E)/nodes/sub/surge' && ! grep -qi vless '$(E)/nodes/sub/surge'"
+check "Quantumult X 订阅只含 Reality" bash -c "grep -q '^vless=' '$(E)/nodes/sub/qx' && ! grep -qi hysteria '$(E)/nodes/sub/qx'"
+check "未开启订阅时查看地址会提示" bash -c "! bash dist/pbox.sh sub show"
+check "项目路径不合法时被拒绝" bash -c "! PBOX_SUB_PROJECT='bad path' PBOX_SUB_WTOKEN=a PBOX_SUB_RTOKEN=b bash dist/pbox.sh sub setup"
+
 echo "端口跳跃"
 check "开启端口跳跃" pbox change hysteria2 hop 30000-30999 --yes
 check "链接里带上跳跃范围" grep -q ':443/?.*&mport=30000-30999#' "$(E)/nodes/links.txt"

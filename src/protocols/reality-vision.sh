@@ -155,3 +155,13 @@ proto_reality_vision_doctor() {
     return 1
   fi
 }
+
+# Surge 不支持 VLESS
+proto_reality_vision_client_surge() { :; }
+
+# Quantumult X 的节点写法。未在真机上验证过。
+proto_reality_vision_client_qx() {
+  printf 'vless=%s:%s, method=none, password=%s, obfs=over-tls, obfs-host=%s, reality-base64-pubkey=%s, reality-hex-shortid=%s, vless-flow=xtls-rprx-vision, udp-relay=true, tag=%s\n' \
+    "$(host_fmt "$2")" "$(pubport reality-vision)" "$(uget "$1" uuid)" "$(pget reality-vision sni)" \
+    "$(pget reality-vision public_key)" "$(pget reality-vision short_id)" "$3"
+}

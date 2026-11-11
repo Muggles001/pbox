@@ -74,7 +74,8 @@ EOF
     echo "rules:"
     echo "  - MATCH,proxy"
   } >"$NODES/mihomo.yaml"
-  testing || chmod 600 "$NODES"/*
+  sub_build
+  testing || find "$NODES" -type f -exec chmod 600 {} +
 }
 
 nat_rules() {

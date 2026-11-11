@@ -29,6 +29,7 @@ main() {
     change) cmd_change "$@" ;;
     reset-keys) cmd_reset_keys ;;
     set) cmd_set "$@" ;;
+    sub) cmd_sub "$@" ;;
     firewall) cmd_firewall ;;
     rollback) cmd_rollback ;;
     log) cmd_log "$@" ;;
