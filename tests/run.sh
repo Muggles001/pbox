@@ -117,6 +117,16 @@ export PBOX_BACKUP_PASSWORD=wrong
 new_root
 check "密码错误时拒绝恢复" sh -c "! bash dist/pbox.sh restore '$bk' --yes"
 
+echo "NAT 机器"
+new_root
+export PBOX_TEST_NAT=1 PBOX_REALITY_EXT_PORT=31001
+check "只给了 Reality 的外网端口时安装成功" pbox install --yes
+check "链接里是外网端口" grep -q '@203.0.113.10:31001?' "$(E)/nodes/links.txt"
+check "内核监听的仍是内网端口" grep -q '"port": 443' "$(E)/generated/xray/10_reality-vision.json"
+check "没给外网端口的 Hysteria2 没有安装" test ! -e "$(E)/state/protocols/hysteria2.env"
+check "事后可以修改外网端口" bash -c "bash dist/pbox.sh change reality-vision ext-port 31002 --yes && grep -q ':31002?' '$(E)/nodes/links.txt'"
+unset PBOX_TEST_NAT PBOX_REALITY_EXT_PORT
+
 echo "卸载"
 new_root
 pbox install --yes >/dev/null 2>&1

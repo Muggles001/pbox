@@ -29,7 +29,8 @@ show_plan() {
   # 中文标签是全角字符，printf 的宽度按字节算会对不齐，所以标签后统一用固定间隔
   label=$(t plan_proto)
   for id in $(protos_enabled); do
-    printf '  %s   %-22s %s %s\n' "$label" "$(pmeta "$id" title)" "$(pmeta "$id" l4 | tr a-z A-Z)" "$(pget "$id" port)"
+    printf '  %s   %-22s %s %s%s\n' "$label" "$(pmeta "$id" title)" "$(pmeta "$id" l4 | tr a-z A-Z)" "$(pget "$id" port)" \
+      "$([ -n "$(pget "$id" ext_port)" ] && printf ' → %s' "$(pget "$id" ext_port)")"
     label=$(t plan_blank)
   done
   for core in $(cores_needed); do cores="$cores${cores:+  ·  }$(core_title "$core")"; done
@@ -39,6 +40,32 @@ show_plan() {
   say ""
   [ -n "${PLAN_NOTES:-}" ] && printf '%s' "$PLAN_NOTES" | while IFS= read -r id; do note "$id"; done
   return 0
+}
+
+# NAT 机器：没有独立公网地址，只有商家转发出来的几个端口。
+# 逐个协议问清外网端口；留空表示这台机器不装这个协议（例如商家不转发 UDP）。
+nat_setup() {
+  local id k e
+  [ "${NAT4:-0}" = 1 ] || return 0
+  gset nat 1
+  [ "$ASSUME_YES" = 1 ] || { head1 "$(t nat_title)"; say "$(t nat_explain)"; }
+  for id in $(protos_enabled); do
+    case "$id" in reality-vision) k=REALITY_EXT_PORT ;; hysteria2) k=HY2_EXT_PORT ;; *) k="" ;; esac
+    e=$(opt "$k")
+    if [ -z "$e" ] && [ "$ASSUME_YES" != 1 ]; then
+      say ""
+      say "  $(t nat_rule "$(pmeta "$id" title)" "$(pget "$id" port)" "$(pmeta "$id" l4 | tr a-z A-Z)")"
+      ask "  $(t nat_ask)" ""
+      e="$REPLY"
+    fi
+    if [ -z "$e" ]; then
+      rm -f "$CUR/protocols/$id.env"
+      continue
+    fi
+    valid_port "$e" || { txn_abort; die "$(t bad_port "$e")"; }
+    pset "$id" ext_port "$e"
+  done
+  [ -n "$(protos_enabled)" ] || { txn_abort; die "$(t nat_none)"; }
 }
 
 install_abort() {
@@ -78,6 +105,7 @@ cmd_install() {
     pcall "$id" plan || { txn_abort; die "$(t no_port)"; }
   done
   conflict_check
+  nat_setup
   show_plan
   if [ "$DRY_RUN" = 1 ]; then txn_abort; return 0; fi
   confirm "$(t plan_go)" || { txn_abort; return 0; }
@@ -186,6 +214,11 @@ cmd_change() {
       [ "$val" = auto ] && val=$(random_port "$l4")
       valid_port "$val" || { txn_abort; die "$(t bad_port "$val")"; }
       pset "$id" port "$val"
+      ;;
+    ext-port)
+      valid_port "$val" || { txn_abort; die "$(t bad_port "$val")"; }
+      pset "$id" ext_port "$val"
+      gset nat 1
       ;;
     sni)
       [ "$id" = reality-vision ] || { txn_abort; die "$(t change_usage)"; }
@@ -404,6 +437,7 @@ pbox $PBOX_VERSION
   pbox doctor [--report]
   pbox add <proto> [port]   pbox del <proto>
   pbox change <proto> port <n|auto>
+  pbox change <proto> ext-port <n>
   pbox change reality-vision sni <domain|auto>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]

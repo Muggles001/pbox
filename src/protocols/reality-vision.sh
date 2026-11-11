@@ -76,7 +76,7 @@ EOF
 # 浏览器指纹固定用 chrome：它的作用是混进最大的人群，不该随机。
 proto_reality_vision_share_link() {
   printf 'vless://%s@%s:%s?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#%s\n' \
-    "$(uget "$1" uuid)" "$(host_fmt "$2")" "$(pget reality-vision port)" "$(pget reality-vision sni)" \
+    "$(uget "$1" uuid)" "$(host_fmt "$2")" "$(pubport reality-vision)" "$(pget reality-vision sni)" \
     "$(pget reality-vision public_key)" "$(pget reality-vision short_id)" "$3"
 }
 
@@ -86,7 +86,7 @@ proto_reality_vision_client_singbox() {
       "type": "vless",
       "tag": "$3",
       "server": "$2",
-      "server_port": $(pget reality-vision port),
+      "server_port": $(pubport reality-vision),
       "uuid": "$(uget "$1" uuid)",
       "flow": "xtls-rprx-vision",
       "tls": {
@@ -104,7 +104,7 @@ proto_reality_vision_client_mihomo() {
   - name: "$3"
     type: vless
     server: "$2"
-    port: $(pget reality-vision port)
+    port: $(pubport reality-vision)
     uuid: "$(uget "$1" uuid)"
     network: tcp
     udp: true

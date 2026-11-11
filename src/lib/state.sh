@@ -39,6 +39,13 @@ users_list() {
   done
 }
 
+# 写进节点信息的端口。NAT 机器上监听的是内网端口，客户端要连的是商家转发出来的外网端口。
+pubport() {
+  local e
+  e=$(pget "$1" ext_port)
+  printf '%s' "${e:-$(pget "$1" port)}"
+}
+
 proto_enabled() { [ -f "$CUR/protocols/$1.env" ]; }
 
 # 协议模块的统一调用入口：pcall <协议> <函数> [参数]

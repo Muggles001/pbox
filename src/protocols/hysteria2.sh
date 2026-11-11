@@ -60,7 +60,7 @@ proto_hysteria2_share_link() {
   local tail="pinSHA256=$(pget hysteria2 cert_sha256)"
   [ "${4:-}" = insecure ] && tail="insecure=1"
   printf 'hysteria2://%s@%s:%s/?sni=%s&%s#%s\n' \
-    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pget hysteria2 port)" "$(pget hysteria2 sni)" "$tail" "$3"
+    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport hysteria2)" "$(pget hysteria2 sni)" "$tail" "$3"
 }
 
 proto_hysteria2_client_singbox() {
@@ -69,7 +69,7 @@ proto_hysteria2_client_singbox() {
       "type": "hysteria2",
       "tag": "$3",
       "server": "$2",
-      "server_port": $(pget hysteria2 port),
+      "server_port": $(pubport hysteria2),
       "password": "$(uget "$1" password)",
       "tls": {
         "enabled": true,
@@ -86,7 +86,7 @@ proto_hysteria2_client_mihomo() {
   - name: "$3"
     type: hysteria2
     server: "$2"
-    port: $(pget hysteria2 port)
+    port: $(pubport hysteria2)
     password: "$(uget "$1" password)"
     sni: "$(pget hysteria2 sni)"
     alpn: [h3]

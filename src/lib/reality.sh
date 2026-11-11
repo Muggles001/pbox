@@ -1,11 +1,7 @@
 # 内置候选都是有大量正常访问的真实网站，这份名单公开不构成问题。
-# 是否可用以本机实测为准；可用 /etc/pbox/reality-candidates.txt 整份替换（每行一个域名）。
-REALITY_CANDIDATES="www.nvidia.com www.cisco.com www.oracle.com www.ibm.com www.intel.com www.amd.com
-www.hp.com www.dell.com www.lenovo.com www.asus.com www.sony.com www.samsung.com www.toyota.com
-www.bmw.com www.sap.com www.siemens.com www.bosch.com www.philips.com www.ikea.com www.nintendo.com
-www.logitech.com www.tesla.com www.adobe.com www.autodesk.com www.vmware.com www.redhat.com
-www.mozilla.org www.python.org www.debian.org www.stanford.edu www.mit.edu www.ox.ac.uk www.ethz.ch
-www.u-tokyo.ac.jp www.rakuten.co.jp www.yahoo.co.jp www.booking.com www.airbnb.com www.spotify.com"
+# 这 11 个是 2026-11 在三种系统上实测全部通过筛选的。是否可用仍以本机实测为准；可用 /etc/pbox/reality-candidates.txt 整份替换（每行一个域名）。
+REALITY_CANDIDATES="www.cisco.com www.asus.com www.toyota.com www.bosch.com www.adobe.com www.mozilla.org
+www.python.org www.debian.org www.rakuten.co.jp www.yahoo.co.jp www.airbnb.com"
 
 reality_candidates() {
   if [ -f "$ETC/reality-candidates.txt" ]; then

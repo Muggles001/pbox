@@ -11,9 +11,9 @@ fetch() { curl -fsSL --proto '=https' --tlsv1.2 "$@"; }
 
 # 优先读本机网卡。只有读到的是内网地址（NAT 机器）时才向外查询，并先告知。
 detect_ips() {
-  IP4="" IP6=""
+  IP4="" IP6="" NAT4=0
   if testing; then
-    IP4="${PBOX_TEST_IP4:-}" IP6="${PBOX_TEST_IP6:-}"
+    IP4="${PBOX_TEST_IP4:-}" IP6="${PBOX_TEST_IP6:-}" NAT4="${PBOX_TEST_NAT:-0}"
     return 0
   fi
   if has ip; then
@@ -22,6 +22,7 @@ detect_ips() {
   fi
   case "$IP6" in fe80:* | fc* | fd* | ::1) IP6="" ;; esac
   if [ -n "$IP4" ] && is_private4 "$IP4"; then
+    NAT4=1
     note "$(t ip_external_note)"
     IP4=$(fetch -4 --max-time 6 https://one.one.one.one/cdn-cgi/trace 2>/dev/null | sed -n 's/^ip=//p')
   fi

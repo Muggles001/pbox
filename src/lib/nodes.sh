@@ -75,6 +75,13 @@ EOF
   testing || chmod 600 "$NODES"/*
 }
 
+nat_rules() {
+  local id
+  for id in $(protos_enabled); do
+    hint "$(t nat_rule_line "$(pget "$id" port)" "$(pubport "$id")" "$(pmeta "$id" l4 | tr a-z A-Z)")"
+  done
+}
+
 nodes_show() {
   local i=0 line insecure="${1:-}"
   head1 "$(t nodes_title)"
@@ -91,7 +98,12 @@ nodes_show() {
   say "  $(t nodes_files)   ${NODES#"$R"}/"
   proto_enabled hysteria2 && say "  ${C_D}$(t nodes_pin_hint)${C_0}"
   say ""
-  note "$(t nodes_secgroup "$(ports_wanted | tr '\n' ' ')")"
+  if [ "$(gget nat 0)" = 1 ]; then
+    note "$(t nodes_nat)"
+    nat_rules
+  else
+    note "$(t nodes_secgroup "$(ports_wanted | tr '\n' ' ')")"
+  fi
 }
 
 # 二维码只在本机生成，节点链接不会发给任何在线服务。
