@@ -1,0 +1,44 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        run: ./build.sh
+      - name: shellcheck
+        run: shellcheck -S warning -e SC2155,SC1091,SC2034 dist/pbox.sh install.sh build.sh
+      - name: tests that do not touch the system
+        run: bash tests/run.sh
+
+  # 托管的运行器是带 systemd 的真实虚拟机，可以完整地装一遍再卸掉
+  real-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./build.sh
+      - name: install, change, rollback, backup, uninstall, restore
+        run: sudo bash tests/vm.sh
+
+  # 容器里没有服务管理器：只验证下载、哈希、内核对配置的校验
+  containers:
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["debian:12", "debian:13", "alpine:3.20"]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    steps:
+      - name: tools
+        run: |
+          if command -v apk >/dev/null; then apk add --no-cache bash curl tar unzip openssl iproute2 coreutils git
+          else apt-get update -qq && apt-get install -y -qq curl tar unzip openssl iproute2 ca-certificates git; fi
+      - uses: actions/checkout@v4
+      - run: bash build.sh
+      - run: bash tests/vm.sh --no-services
