@@ -29,6 +29,15 @@ detect_ips() {
   return 0
 }
 
+# 地区缩写（如 HK、JP），用在节点名里。和查公网地址用同一个服务，只在安装或用户要求时查一次。
+detect_region() {
+  if testing; then
+    printf '%s' "${PBOX_TEST_REGION:-}"
+    return 0
+  fi
+  fetch --max-time 6 https://one.one.one.one/cdn-cgi/trace 2>/dev/null | sed -n 's/^loc=//p' | tr -cd 'A-Za-z' | cut -c1-2
+}
+
 have_ipv6_stack() {
   testing && { [ -n "${PBOX_TEST_IP6:-}" ]; return; }
   [ -s /proc/net/if_inet6 ]

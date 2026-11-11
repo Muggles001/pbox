@@ -117,6 +117,20 @@ export PBOX_BACKUP_PASSWORD=wrong
 new_root
 check "密码错误时拒绝恢复" sh -c "! bash dist/pbox.sh restore '$bk' --yes"
 
+echo "地区缩写"
+new_root
+export PBOX_TEST_REGION=HK
+check "安装时写入地区" bash -c "bash dist/pbox.sh install --yes && grep -qx region=HK '$PBOX_ROOT/etc/pbox/state/global.env'"
+check "节点名带地区缩写" grep -q '#HK-Reality-IPv4' "$(E)/nodes/links.txt"
+check "可以手动改地区" bash -c "bash dist/pbox.sh set region JP --yes && grep -q '#JP-Hysteria2-IPv4' '$(E)/nodes/links.txt'"
+check "可以关闭地区" bash -c "bash dist/pbox.sh set region off --yes && grep -q '#Reality-IPv4' '$(E)/nodes/links.txt'"
+unset PBOX_TEST_REGION
+
+echo "菜单"
+check "主菜单能画出来并正常退出" bash -c "printf '0\n' | bash dist/pbox.sh | grep -q 'VLESS-Reality-Vision'"
+check "进协议管理、进某个协议、逐级返回" bash -c "printf '3\n1\n0\n0\n0\n' | bash dist/pbox.sh >/dev/null"
+check "进设置再返回" bash -c "printf '4\n0\n0\n' | bash dist/pbox.sh >/dev/null"
+
 echo "NAT 机器"
 new_root
 export PBOX_TEST_NAT=1 PBOX_REALITY_EXT_PORT=31001

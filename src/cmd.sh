@@ -75,8 +75,30 @@ install_abort() {
   die "$(t install_undone)"
 }
 
+# 交互安装时可以自选协议和端口；直接回车就是推荐配置。
+install_customize() {
+  local id k picked=""
+  [ "$ASSUME_YES" = 1 ] && return 0
+  [ -n "$(opt PROTOCOLS)" ] && return 0
+  ask "$(t inst_mode)" ""
+  case "$REPLY" in c | C) ;; *) return 0 ;; esac
+  for id in $PROTO_ALL; do
+    confirm "  $(t inst_enable_q "$(pmeta "$id" title)")" || continue
+    picked="$picked $id"
+    case "$id" in reality-vision) k=PBOX_REALITY_PORT ;; hysteria2) k=PBOX_HY2_PORT ;; *) k="" ;; esac
+    [ -n "$k" ] || continue
+    ask "  $(t inst_port_q)" ""
+    if [ -n "$REPLY" ]; then
+      valid_port "$REPLY" || die "$(t bad_port "$REPLY")"
+      export "$k=$REPLY"
+    fi
+  done
+  [ -n "$picked" ] || die "$(t cancelled)"
+  PBOX_PROTOCOLS="$picked"
+}
+
 cmd_install() {
-  local protos id mode dom
+  local protos id mode dom region
   need_root
   [ -d "$STATE" ] && die "$(t already_installed)"
   detect_sys
@@ -85,6 +107,7 @@ cmd_install() {
   ensure_deps
   detect_ips
   [ -n "$IP4$IP6" ] || die "$(t no_ip)"
+  install_customize
   protos=$(opt PROTOCOLS)
   [ -n "$protos" ] || protos="$PRESET_RECOMMENDED"
   txn_begin
@@ -93,6 +116,12 @@ cmd_install() {
   gset ip6 "$IP6"
   gset block_private 1
   gset update_check 1
+  region=$(opt REGION)
+  case "$region" in
+    none) region="" ;;
+    "") region=$(detect_region) ;;
+  esac
+  gset region "$region"
   mode=$(opt ADDR_MODE)
   dom=$(opt DOMAIN)
   gset addr_mode "${mode:-split}"
@@ -283,6 +312,13 @@ cmd_set() {
       esac
       gset addr_mode "$val"
       ;;
+    region)
+      case "$val" in
+        auto | "") val=$(detect_region) ;;
+        off | none) val="" ;;
+      esac
+      gset region "$(printf '%s' "$val" | tr -cd 'A-Za-z0-9' | cut -c1-8)"
+      ;;
     update-check)
       case "$val" in on) gset update_check 1 ;; off) gset update_check 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
       ;;
@@ -361,72 +397,6 @@ cmd_lang() {
   say "$(t lang_set)"
 }
 
-menu_protocols() {
-  local id
-  head1 "$(t m_protocols)"
-  for id in $PROTO_ALL; do
-    if proto_enabled "$id"; then
-      printf '  %s●%s %-24s %s %s\n' "$C_G" "$C_0" "$(pmeta "$id" title)" "$(pmeta "$id" l4 | tr a-z A-Z)" "$(pget "$id" port)"
-    else
-      printf '  ○ %s\n' "$(pmeta "$id" title)"
-    fi
-  done
-  say ""
-  say "  pbox add <$(echo $PROTO_ALL | tr ' ' '|')> [port|auto]"
-  say "  pbox del <...>"
-}
-
-menu_settings() {
-  head1 "$(t m_settings)"
-  say "  pbox change <proto> port <n|auto>              $(t ms_port)"
-  say "  pbox change reality-vision sni <domain|auto>   $(t ms_sni)"
-  say "  pbox reset-keys                                $(t ms_reset)"
-  say "  pbox set addr-mode <split|merged|all> [domain] $(t ms_addr)  [$(gget addr_mode split)]"
-  say "  pbox set update-check <on|off>                 $(t ms_upd)"
-  say "  pbox set block-private <on|off>                $(t ms_block)"
-  say "  pbox firewall                                  $(t ms_fw)"
-  say "  pbox lang                                      中文 / English"
-}
-
-cmd_menu() {
-  local n status
-  need_root
-  if [ ! -d "$STATE" ]; then
-    cmd_install
-    return
-  fi
-  detect_sys
-  while :; do
-    status="${C_G}● $(t m_running)${C_0}"
-    for n in $(cores_needed); do svc active "$(core_svc "$n")" || status="${C_R}● $(t m_stopped)${C_0}"; done
-    printf '\n%spbox%s %s   %s\n' "$C_B" "$C_0" "$PBOX_VERSION" "$status"
-    update_notice
-    say ""
-    say "  1 $(t m_nodes)"
-    say "  2 $(t m_doctor)"
-    say "  3 $(t m_protocols)"
-    say "  4 $(t m_settings)"
-    say "  5 $(t m_update)"
-    say "  6 $(t m_backup)"
-    say "  7 $(t m_log)"
-    say "  0 $(t m_uninstall)"
-    say ""
-    printf '%s: ' "$(t m_choose)"
-    IFS= read -r n || return 0
-    case "$n" in
-      1) cmd_nodes ;;
-      2) cmd_doctor || true ;;
-      3) menu_protocols ;;
-      4) menu_settings ;;
-      5) (cmd_update) ;;
-      6) (cmd_backup) ;;
-      7) cmd_log ;;
-      0) cmd_uninstall; return ;;
-      "" | q) return 0 ;;
-    esac
-  done
-}
-
 cmd_help() {
   cat <<EOF
 pbox $PBOX_VERSION
@@ -441,6 +411,7 @@ pbox $PBOX_VERSION
   pbox change reality-vision sni <domain|auto>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]
+  pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE

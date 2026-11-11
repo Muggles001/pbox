@@ -24,6 +24,7 @@ src/lib/doctor.sh
 src/lib/backup.sh
 src/lib/update.sh
 src/cmd.sh
+src/menu.sh
 src/main.sh
 "
 

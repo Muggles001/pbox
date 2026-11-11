@@ -8,7 +8,8 @@ fi
 t() {
   local k="T_$1" f
   shift
-  f="${!k:-$k}"
+  # 只有变量不存在时才回退显示键名；空字符串是合法的文案
+  f="${!k-$k}"
   # shellcheck disable=SC2059
   printf "$f" "$@"
 }

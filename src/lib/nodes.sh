@@ -13,13 +13,15 @@ node_hosts() {
 
 # 逐个节点回调：node_each <函数>，回调参数为 <协议> <用户> <地址> <节点名>
 node_each() {
-  local fn="$1" id u line label host name multi=0
+  local fn="$1" id u line label host name multi=0 region
+  region=$(gget region)
   [ "$(users_list | wc -l)" -gt 1 ] && multi=1
   for id in $(protos_enabled); do
     for u in $(users_list); do
       node_hosts | while IFS= read -r line; do
         label="${line%%|*}" host="${line#*|}"
         name="$(pmeta "$id" short)-$label"
+        [ -n "$region" ] && name="$region-$name"
         [ "$multi" = 1 ] && name="$name-$u"
         "$fn" "$id" "$u" "$host" "$name"
       done
