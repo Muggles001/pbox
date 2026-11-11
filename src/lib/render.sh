@@ -74,13 +74,12 @@ core_sync() {
   local core="$1" n
   n=$(core_svc "$core")
   if [ -d "$GEN/$(core_dir "$core")" ]; then
-    if testing || [ ! -f "/etc/systemd/system/$n.service" ] && [ ! -f "/etc/init.d/$n" ]; then
-      svc_write "$n" "$(core_cmd "$core")" "$([ "$core" = singbox ] && echo 1 || echo 0)"
-      svc enable "$n"
-    fi
+    # 每次都重写服务文件，这样运行环境的变化（例如解析配置的映射）能跟上
+    svc_write "$n" "$(core_cmd "$core")" "$([ "$core" = singbox ] && echo 1 || echo 0)"
+    svc enable "$n"
     if svc active "$n"; then
-      # sing-box 支持热重载，连接不断；Xray 只能重启。
-      [ "$core" = singbox ] && svc reload "$n" 2>/dev/null || svc restart "$n"
+      # sing-box 支持热重载，连接不断；Xray 只能重启。服务文件变了则一律重启。
+      [ "$core" = singbox ] && [ "$UNIT_CHANGED" = 0 ] && svc reload "$n" 2>/dev/null || svc restart "$n"
     else
       svc start "$n"
     fi

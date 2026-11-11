@@ -70,8 +70,15 @@ else
   check "此时 Xray 没有被重启" bash -c "[ \"\$(pgrep -x xray)\" = '$xpid' ]"
   check "改 Reality 端口后在新端口监听" bash -c "$P change reality-vision port 24443 --yes && sleep 1 && ss -H -lnt | grep -q ':24443 '"
   check "回滚" $P rollback
-  check "体检能运行" bash -c "$P doctor; true"
+  check "体检全部通过（含两个协议的节点自测）" $P doctor
   $P doctor || true
+  # 复现服务商模板的问题：解析配置只有 root 可读
+  cat /etc/resolv.conf >/tmp/resolv.keep
+  rm -f /etc/resolv.conf
+  cp /tmp/resolv.keep /etc/resolv.conf
+  chmod 600 /etc/resolv.conf
+  check "解析配置只有 root 可读时，重新生效后节点仍然可用" bash -c "$P change hysteria2 port auto --yes && sleep 2 && $P doctor"
+  chmod 644 /etc/resolv.conf
   export PBOX_BACKUP_PASSWORD=vm-test
   check "备份" $P backup /tmp/pbox-vm.bin --yes
   check "卸载" $P uninstall --yes

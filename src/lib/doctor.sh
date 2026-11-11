@@ -90,6 +90,36 @@ d_egress() {
   return $rc
 }
 
+d_dns() {
+  if runuser_reads_dns; then
+    ok "$(t d_dns_ok)"
+  elif [ "$INIT" = systemd ] && [ -f "$ETC/resolv.conf" ]; then
+    ok "$(t d_dns_bound)"
+  else
+    bad "$(t d_dns_bad)"
+    hint "chmod 644 /etc/resolv.conf"
+    return 1
+  fi
+}
+
+# 节点自测：在本机临时起一个客户端，经由节点访问一次外网。
+# 端口在监听、配置合法，都不等于节点能用；只有真的走通一次才算数。
+# selftest <内核> <客户端配置文件> <本地端口>
+selftest() {
+  local b pid rc=1
+  b=$(core_bin "$1")
+  case "$1" in
+    xray) "$b" run -c "$2" >/dev/null 2>&1 & ;;
+    singbox) "$b" run -c "$2" -D "$(dirname "$2")" >/dev/null 2>&1 & ;;
+  esac
+  pid=$!
+  sleep 2
+  curl -s -o /dev/null -m 12 -x "socks5h://127.0.0.1:$3" https://www.cloudflare.com/cdn-cgi/trace && rc=0
+  kill "$pid" 2>/dev/null
+  wait "$pid" 2>/dev/null
+  return $rc
+}
+
 d_resources() {
   local mem disk
   mem=$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo 2>/dev/null)
@@ -126,7 +156,7 @@ cmd_doctor() {
   local report="${1:-}" pass=0 total=0 out fn id
   need_installed
   out=$(mktemp)
-  for fn in d_services d_config d_ports d_firewall d_time d_egress; do
+  for fn in d_services d_config d_ports d_firewall d_dns d_time d_egress; do
     total=$((total + 1))
     if "$fn" >>"$out" 2>&1; then pass=$((pass + 1)); fi
   done

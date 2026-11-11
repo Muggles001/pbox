@@ -106,6 +106,23 @@ run_user_create() {
   manifest_add user "$RUN_USER"
 }
 
+# 有些服务商的系统模板把 /etc/resolv.conf 设成只有 root 可读。内核以专用账号运行，
+# 读不到它就解析不了任何域名，表现为端口在监听但所有连接超时。
+runuser_reads_dns() {
+  testing && return 0
+  su -s /bin/sh "$RUN_USER" -c 'test -r /etc/resolv.conf' 2>/dev/null
+}
+
+# 不改动系统文件：复制一份给内核，由服务文件把它映射成内核自己看到的 /etc/resolv.conf。
+dns_sync() {
+  testing && return 0
+  if runuser_reads_dns; then
+    rm -f "$ETC/resolv.conf"
+  else
+    cp /etc/resolv.conf "$ETC/resolv.conf" 2>/dev/null
+  fi
+}
+
 # svc <动作> <服务名>
 svc() {
   local a="$1" n="$2"
@@ -130,8 +147,11 @@ svc() {
 # svc_write <服务名> <启动命令> [支持热重载 0|1]
 # 内核以专用账号运行，只保留绑定低位端口的能力；日志写文件，便于单独清空。
 svc_write() {
-  local n="$1" cmd="$2" rel="${3:-0}" f
+  local n="$1" cmd="$2" rel="${3:-0}" f before
+  UNIT_CHANGED=0
   testing && return 0
+  [ "$INIT" = systemd ] && f="/etc/systemd/system/$n.service" || f="/etc/init.d/$n"
+  before=$(cat "$f" 2>/dev/null)
   mkdir -p "$LOGDIR" "$VARDIR"
   chown "$RUN_USER:$RUN_USER" "$LOGDIR" "$VARDIR"
   chmod 750 "$LOGDIR" "$VARDIR"
@@ -153,6 +173,7 @@ WorkingDirectory=$VARDIR
 ExecStart=$cmd
 EOF
       [ "$rel" = 1 ] && echo 'ExecReload=/bin/kill -HUP $MAINPID'
+      [ -f "$ETC/resolv.conf" ] && echo "BindReadOnlyPaths=$ETC/resolv.conf:/etc/resolv.conf"
       cat <<EOF
 Restart=on-failure
 RestartSec=5
@@ -190,6 +211,8 @@ depend() { need net; }
 EOF
     chmod 755 "$f"
   fi
+  # 服务文件有变化时，热重载不够，调用方必须重启才能让新的运行环境生效
+  [ "$before" = "$(cat "$f")" ] || UNIT_CHANGED=1
   manifest_add svc "$n"
   manifest_add file "$f"
 }
@@ -211,9 +234,11 @@ fix_perms() {
   testing && return 0
   # 创建目录时的默认权限不允许其他账号进入；内核以专用账号运行，必须能走到自己的程序文件
   chmod 755 "$LIBDIR" "$BINDIR" 2>/dev/null
+  dns_sync
   chown -R root:root "$ETC"
   chmod 750 "$ETC"
   chgrp "$RUN_USER" "$ETC"
+  [ -f "$ETC/resolv.conf" ] && chgrp "$RUN_USER" "$ETC/resolv.conf" && chmod 640 "$ETC/resolv.conf"
   local d
   for d in "$GEN" "$CERTS" "$CUSTOM"; do
     [ -d "$d" ] || continue

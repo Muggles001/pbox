@@ -94,7 +94,31 @@ proto_hysteria2_client_mihomo() {
 EOF
 }
 
+proto_hysteria2_selftest() {
+  local d p u rc
+  d=$(mktemp -d) p=$(random_port tcp) u=$(users_list | head -1)
+  cat >"$d/c.json" <<EOF
+{"log": {"disabled": true},
+ "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
+ "outbounds": [{"type": "hysteria2", "server": "127.0.0.1", "server_port": $(pget hysteria2 port),
+  "password": "$(uget "$u" password)",
+  "tls": {"enabled": true, "server_name": "$(pget hysteria2 sni)", "alpn": ["h3"],
+   "certificate_public_key_sha256": ["$(pget hysteria2 cert_spki)"]}}]}
+EOF
+  selftest singbox "$d/c.json" "$p"
+  rc=$?
+  rm -rf "$d"
+  return $rc
+}
+
 proto_hysteria2_doctor() {
+  if proto_hysteria2_selftest; then
+    ok "$(t d_self_ok Hysteria2)"
+  else
+    bad "$(t d_self_bad Hysteria2)"
+    hint "pbox log"
+    return 1
+  fi
   if cert_valid_days "$CERTS/hysteria2.crt" 30; then
     ok "$(t d_cert_ok Hysteria2)"
   else

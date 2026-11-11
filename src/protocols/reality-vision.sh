@@ -118,8 +118,34 @@ proto_reality_vision_client_mihomo() {
 EOF
 }
 
+proto_reality_vision_selftest() {
+  local d p u rc
+  d=$(mktemp -d) p=$(random_port tcp) u=$(users_list | head -1)
+  cat >"$d/c.json" <<EOF
+{"log": {"loglevel": "none"},
+ "inbounds": [{"listen": "127.0.0.1", "port": $p, "protocol": "socks"}],
+ "outbounds": [{"protocol": "vless",
+  "settings": {"vnext": [{"address": "127.0.0.1", "port": $(pget reality-vision port),
+    "users": [{"id": "$(uget "$u" uuid)", "flow": "xtls-rprx-vision", "encryption": "none"}]}]},
+  "streamSettings": {"network": "raw", "security": "reality", "realitySettings": {
+    "serverName": "$(pget reality-vision sni)", "fingerprint": "chrome",
+    "publicKey": "$(pget reality-vision public_key)", "shortId": "$(pget reality-vision short_id)"}}}]}
+EOF
+  selftest xray "$d/c.json" "$p"
+  rc=$?
+  rm -rf "$d"
+  return $rc
+}
+
 proto_reality_vision_doctor() {
   local sni
+  if proto_reality_vision_selftest; then
+    ok "$(t d_self_ok Reality)"
+  else
+    bad "$(t d_self_bad Reality)"
+    hint "pbox log"
+    return 1
+  fi
   sni=$(pget reality-vision sni)
   if reality_check "$sni" >/dev/null; then
     ok "$(t d_reality_ok "$sni")"
