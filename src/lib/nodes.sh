@@ -19,6 +19,7 @@ node_each() {
   [ -z "${NODE_USER:-}" ] && [ "$(users_list | wc -l)" -gt 1 ] && multi=1
   for id in $(protos_enabled); do
     for u in ${NODE_USER:-$(users_list)}; do
+      user_has "$u" "$id" || continue
       if declare -F "proto_${id//-/_}_hosts" >/dev/null; then pcall "$id" hosts; else node_hosts; fi | while IFS= read -r line; do
         label="${line%%|*}" host="${line#*|}"
         # 第三段是可选的附加信息，协议模块通过 NODE_EXTRA 读取
@@ -39,18 +40,13 @@ _node_sb() { pcall "$1" client_singbox "$2" "$3" "$4"; echo "@@"; }
 _node_mh() { pcall "$1" client_mihomo "$2" "$3" "$4"; }
 _node_name() { echo "$4"; }
 
-# 所有客户端格式都在本机生成，不调用任何在线转换服务。
-# nodes_build <目录>：按当前的 NODE_USER 生成链接和两种客户端配置
-nodes_build() {
-  local dir="$1" names sb tags="" n
-  mkdir -p "$dir"
-  node_each _node_link >"$dir/links.txt"
-  names=$(node_each _node_name)
-  for n in $names; do tags="$tags\"$n\", "; done
+# 把节点片段包成完整的客户端配置。片段与外壳分开，是因为订阅要把几台机器的片段合到一起。
+# 出站片段里每个节点后面跟一行 @@，这里换成 JSON 数组元素之间的逗号。
+wrap_singbox() { # <节点名文件> <出站片段文件>
+  local tags="" n
+  while IFS= read -r n; do [ -n "$n" ] && tags="$tags\"$n\", "; done <"$1"
   tags="${tags%, }"
-  # 各节点片段以 @@ 行分隔，这里换成 JSON 数组元素之间的逗号
-  sb=$(node_each _node_sb | awk '/^@@$/{sep=1; next} {if(sep){print "    ,"; sep=0} print}')
-  cat >"$dir/sing-box.json" <<EOF
+  cat <<EOF
 {
   "log": {"level": "warn"},
   "inbounds": [
@@ -58,27 +54,41 @@ nodes_build() {
   ],
   "outbounds": [
     {"type": "selector", "tag": "proxy", "outbounds": [$tags]},
-$sb
-    ,
+$(awk '/^@@$/{print "    ,"; next} {print}' "$2")
     {"type": "direct", "tag": "direct"}
   ],
   "route": {"final": "proxy", "auto_detect_interface": true}
 }
 EOF
-  {
-    echo "mixed-port: 7890"
-    echo "mode: rule"
-    echo "ipv6: true"
-    echo "proxies:"
-    node_each _node_mh
-    echo "proxy-groups:"
-    echo "  - name: proxy"
-    echo "    type: select"
-    echo "    proxies:"
-    for n in $names; do echo "      - \"$n\""; done
-    echo "rules:"
-    echo "  - MATCH,proxy"
-  } >"$dir/mihomo.yaml"
+}
+
+wrap_mihomo() { # <节点名文件> <代理片段文件>
+  local n
+  echo "mixed-port: 7890"
+  echo "mode: rule"
+  echo "ipv6: true"
+  echo "proxies:"
+  cat "$2"
+  echo "proxy-groups:"
+  echo "  - name: proxy"
+  echo "    type: select"
+  echo "    proxies:"
+  while IFS= read -r n; do [ -n "$n" ] && echo "      - \"$n\""; done <"$1"
+  echo "rules:"
+  echo "  - MATCH,proxy"
+}
+
+# 所有客户端格式都在本机生成，不调用任何在线转换服务。
+# nodes_build <目录>：按当前的 NODE_USER 生成链接、片段和两种客户端配置
+nodes_build() {
+  local dir="$1"
+  mkdir -p "$dir/parts"
+  node_each _node_link >"$dir/links.txt"
+  node_each _node_name >"$dir/parts/names"
+  node_each _node_sb >"$dir/parts/singbox"
+  node_each _node_mh >"$dir/parts/clash"
+  wrap_singbox "$dir/parts/names" "$dir/parts/singbox" >"$dir/sing-box.json"
+  wrap_mihomo "$dir/parts/names" "$dir/parts/clash" >"$dir/mihomo.yaml"
 }
 
 # 顶层是全部用户的节点；users/<名字>/ 下是每个人各自的一份，订阅按人生成

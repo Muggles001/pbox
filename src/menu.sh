@@ -346,13 +346,15 @@ menu_user() {
     menu_header "$(t m_users) · $u"
     item 1 mu_show mu_show_d
     item 2 mu_reset mu_reset_d
-    item 3 mu_del mu_del_d
+    item 3 mu_protos mu_protos_d
+    item 4 mu_del mu_del_d
     item 0 m_back m_blank
     choose
     case "$REPLY" in
       1) run cmd_user show "$u" ;;
       2) run cmd_user reset "$u" ;;
-      3) run cmd_user del "$u" ;;
+      3) run cmd_user protocols "$u" ;;
+      4) run cmd_user del "$u" ;;
       *) return 0 ;;
     esac
   done
@@ -387,6 +389,29 @@ menu_users() {
   done
 }
 
+# 多用户时先选是谁的订阅地址
+menu_sub_show() {
+  local u n=0 pick=""
+  if [ "$(users_list | wc -l)" -le 1 ]; then
+    run cmd_sub show
+    return 0
+  fi
+  menu_header "$(t msub_show)"
+  for u in $(users_list); do
+    n=$((n + 1))
+    printf '  %s  %s\n' "$n" "$u"
+  done
+  item 0 m_back m_blank
+  choose
+  n=0
+  for u in $(users_list); do
+    n=$((n + 1))
+    [ "$REPLY" = "$n" ] && pick="$u"
+  done
+  [ -n "$pick" ] && run cmd_sub show "$pick"
+  return 0
+}
+
 menu_sub() {
   while :; do
     menu_header "$(t m_sub)"
@@ -398,14 +423,18 @@ menu_sub() {
     item 1 msub_setup msub_setup_d
     item 2 msub_show msub_show_d
     item 3 msub_push msub_push_d
-    item 4 msub_off msub_off_d
+    item 4 msub_machines msub_machines_d
+    item 5 msub_off msub_off_d
     item 0 m_back m_blank
     choose
     case "$REPLY" in
       1) run cmd_sub setup ;;
-      2) run cmd_sub show ;;
+      2) menu_sub_show ;;
       3) run cmd_sub push ;;
-      4) run cmd_sub off ;;
+      4)
+        run cmd_sub machines
+        ;;
+      5) run cmd_sub off ;;
       *) return 0 ;;
     esac
   done

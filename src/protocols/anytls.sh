@@ -33,7 +33,7 @@ proto_anytls_secrets() {
 
 proto_anytls_render_inbound() {
   local u users="" sep="" certs="${CERTS#"$R"}"
-  for u in $(users_list); do
+  for u in $(proto_users anytls); do
     users="$users$sep{\"name\": \"$u\", \"password\": \"$(uget "$u" password)\"}"
     sep=", "
   done
@@ -95,7 +95,7 @@ EOF
 
 proto_anytls_selftest() {
   local d p u rc
-  d=$(mktemp -d) p=$(random_port tcp) u=$(users_list | head -1)
+  d=$(mktemp -d) p=$(random_port tcp) u=$(proto_users anytls | head -1)
   cat >"$d/c.json" <<EOF
 {"log": {"disabled": true},
  "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],

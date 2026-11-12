@@ -228,6 +228,60 @@ check "没给外网端口的 Hysteria2 没有安装" test ! -e "$(E)/state/proto
 check "事后可以修改外网端口" bash -c "bash dist/pbox.sh change reality-vision ext-port 31002 --yes && grep -q ':31002?' '$(E)/nodes/links.txt'"
 unset PBOX_TEST_NAT PBOX_REALITY_EXT_PORT
 
+echo "每个用户的协议名单"
+new_root
+pbox install --yes >/dev/null 2>&1
+check "添加只能用 Hysteria2 的用户" pbox user add bob hysteria2 --yes
+b_uuid=$(sed -n 's/^uuid=//p' "$(E)/state/users/bob.env")
+b_pass=$(sed -n 's/^password=//p' "$(E)/state/users/bob.env")
+check "名单外的协议里没有他的凭据" bash -c "! grep -q '$b_uuid' '$(E)/generated/sing-box/10_reality-vision.json' && grep -q '$b_pass' '$(E)/generated/sing-box/'*hysteria2.json"
+check "他的节点里只有名单内的协议" bash -c "grep -q '^hysteria2://' '$(E)/nodes/users/bob/links.txt' && ! grep -q '^vless://' '$(E)/nodes/users/bob/links.txt'"
+check "他的客户端配置仍然合法" json_ok "$(E)/nodes/users/bob/sing-box.json"
+check "放开为全部协议" bash -c "bash dist/pbox.sh user protocols bob all --yes && grep -q '$b_uuid' '$(E)/generated/sing-box/10_reality-vision.json'"
+check "不认识的协议名被拒绝" bash -c "! bash dist/pbox.sh user protocols bob nosuch --yes"
+check "不能让某个协议没有任何用户" bash -c "bash dist/pbox.sh user del bob --yes && ! bash dist/pbox.sh user protocols default hysteria2 --yes"
+
+echo "多台机器合并订阅"
+export PBOX_SUB_DIR PBOX_SUB_PROJECT=someone/subs PBOX_SUB_WTOKEN=w PBOX_SUB_RTOKEN=r PBOX_TEST_REGION=JP
+PBOX_SUB_DIR=$(mktemp -d)
+new_root
+A="$PBOX_ROOT"
+pbox install --yes >/dev/null 2>&1
+check "第一台开启订阅" pbox sub setup --yes
+check "只有一台时订阅就是它自己的节点" bash -c "openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray' | diff - '$A/etc/pbox/nodes/users/default/links.txt'"
+new_root
+B="$PBOX_ROOT"
+export PBOX_TEST_IP4=203.0.113.20 PBOX_TEST_IP6=""
+pbox install --yes >/dev/null 2>&1
+check "第二台填同一个仓库" pbox sub setup --yes
+check "标签相同时后加入的自动改名" bash -c "grep -q '^region=JP2$' '$B/etc/pbox/state/global.env' && grep -q '#JP2-' '$B/etc/pbox/nodes/links.txt'"
+check "订阅里是两台机器的节点" bash -c "openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray' | diff - <(cat '$A/etc/pbox/nodes/users/default/links.txt' '$B/etc/pbox/nodes/users/default/links.txt')"
+check "合并后的 sing-box 配置合法且节点不重名" bash -c "python3 -c \"
+import json,sys
+o=json.load(open('$PBOX_SUB_DIR/singbox'))['outbounds']
+t=[x['tag'] for x in o]
+assert len(t)==len(set(t)) and any(x.startswith('JP2-') for x in t) and any(x.startswith('JP-') for x in t)
+assert sorted(o[0]['outbounds'])==sorted(x for x in t if x not in ('proxy','direct'))
+\""
+check "合并后的 Clash 配置里两台都在" bash -c "grep -q 'name: \"\\?JP-' '$PBOX_SUB_DIR/clash' && grep -q 'name: \"\\?JP2-' '$PBOX_SUB_DIR/clash'"
+check "同名用户在两台机器上共用一个订阅" bash -c "
+  PBOX_ROOT='$A' bash dist/pbox.sh user add carol --yes &&
+  PBOX_ROOT='$B' bash dist/pbox.sh user add carol hysteria2 --yes &&
+  k=\$(sed -n 's/^sub_key=//p' '$A/etc/pbox/state/users/carol.env') &&
+  test \"\$k\" = \"\$(sed -n 's/^sub_key=//p' '$B/etc/pbox/state/users/carol.env')\" &&
+  openssl base64 -d -A <\"$PBOX_SUB_DIR/v2ray-\$k\" | diff - <(cat '$A/etc/pbox/nodes/users/carol/links.txt' '$B/etc/pbox/nodes/users/carol/links.txt')"
+c_key=$(sed -n 's/^sub_key=//p' "$A/etc/pbox/state/users/carol.env")
+check "别人的订阅里没有她的凭据" bash -c "! openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray' | grep -q \"\$(sed -n 's/^uuid=//p' '$A/etc/pbox/state/users/carol.env')\""
+check "一台删了她，另一台的还在" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh user del carol --yes && openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray-$c_key' | diff - '$B/etc/pbox/nodes/users/carol/links.txt'"
+check "两台都删了，订阅文件也删掉" bash -c "PBOX_ROOT='$B' bash dist/pbox.sh user del carol --yes && ! test -e '$PBOX_SUB_DIR/v2ray-$c_key' && ! grep -q carol '$PBOX_SUB_DIR/pbox-index'"
+check "第一台的节点变了，合并结果跟着变" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh change hysteria2 port 4443 --yes && openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray' | grep -q ':4443'"
+check "列出机器" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh sub machines | grep -q JP2"
+check "从另一台上去掉一台机器" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh sub forget JP2 --yes && openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray' | diff - '$A/etc/pbox/nodes/users/default/links.txt' && ! test -e '$PBOX_SUB_DIR'/part-\$(sed -n 's/^sub_machine=//p' '$B/etc/pbox/state/global.env')"
+check "被去掉的机器再次推送会重新加入" bash -c "PBOX_ROOT='$B' bash dist/pbox.sh sub push && test \$(grep -c '^machine ' '$PBOX_SUB_DIR/pbox-index') = 2"
+check "关闭订阅时撤出本机的节点" bash -c "PBOX_ROOT='$B' bash dist/pbox.sh sub off --yes && openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray' | diff - '$A/etc/pbox/nodes/users/default/links.txt'"
+check "最后一台卸载后仓库里不留订阅文件" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh uninstall --yes && test -z \"\$(ls '$PBOX_SUB_DIR')\""
+unset PBOX_SUB_DIR PBOX_SUB_PROJECT PBOX_SUB_WTOKEN PBOX_SUB_RTOKEN PBOX_TEST_REGION
+
 echo "卸载"
 new_root
 pbox install --yes >/dev/null 2>&1

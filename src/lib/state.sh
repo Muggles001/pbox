@@ -39,6 +39,23 @@ users_list() {
   done
 }
 
+# 每个用户可以带一份协议名单（空格分隔）；留空表示全部协议都对他生效
+user_has() { # <用户> <协议>
+  local l
+  l=$(uget "$1" protocols)
+  [ -z "$l" ] && return 0
+  case " $l " in *" $2 "*) return 0 ;; esac
+  return 1
+}
+
+proto_users() { # <协议> → 能用它的用户
+  local u
+  for u in $(users_list); do
+    user_has "$u" "$1" && echo "$u"
+  done
+  return 0
+}
+
 # 写进节点信息的端口。NAT 机器上监听的是内网端口，客户端要连的是商家转发出来的外网端口。
 pubport() {
   local e

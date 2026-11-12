@@ -23,7 +23,7 @@ proto_vless_ws_secrets() { :; }
 
 proto_vless_ws_render_inbound() {
   local u users="" sep=""
-  for u in $(users_list); do
+  for u in $(proto_users vless-ws); do
     users="$users$sep{\"name\": \"$u\", \"uuid\": \"$(uget "$u" uuid)\"}"
     sep=", "
   done
@@ -114,7 +114,7 @@ EOF
 # vless_ws_selftest <客户端连接的地址> <隧道域名>
 vless_ws_selftest() {
   local d p u rc
-  d=$(mktemp -d) p=$(random_port tcp) u=$(users_list | head -1)
+  d=$(mktemp -d) p=$(random_port tcp) u=$(proto_users vless-ws | head -1)
   cat >"$d/c.json" <<EOF
 {"log": {"disabled": true},
  "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],

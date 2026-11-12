@@ -167,6 +167,7 @@ cmd_install() {
 # 卸载按安装清单逐项撤销，全程不需要联网。
 do_uninstall() {
   local kind val
+  sub_leave || warn "$(t sub_leave_fail)"
   if [ -f "$MANIFEST" ]; then
     grep '^svc	' "$MANIFEST" | cut -f2 | while read -r val; do svc_remove "$val"; done
     grep '^fw	' "$MANIFEST" | cut -f2 | while read -r val; do fw_close "${val% *}" "${val#* }"; done
@@ -202,6 +203,10 @@ edit_begin() {
 }
 
 edit_end() {
+  local id
+  for id in $(protos_enabled); do
+    [ -n "$(proto_users "$id")" ] || { txn_abort; die "$(t proto_no_user "$(pmeta "$id" title)")"; }
+  done
   conflict_check
   cores_ensure || { txn_abort; die "$(t dl_abort)"; }
   txn_commit || die "$(t apply_fail)"
@@ -470,8 +475,8 @@ pbox $PBOX_VERSION
   pbox set addr-mode <split|merged|all> [domain]
   pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
-  pbox user [list|add NAME|del NAME|show NAME|reset NAME]
-  pbox sub [setup|show [NAME]|push|off]
+  pbox user [list|add NAME [PROTOCOLS]|protocols NAME <LIST|all>|del NAME|show NAME|reset NAME]
+  pbox sub [setup|show [NAME]|push|machines|forget LABEL|off]
   pbox warp [on|off|all|domains a.com,b.com|status|test]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE

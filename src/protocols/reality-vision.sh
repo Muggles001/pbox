@@ -43,7 +43,7 @@ proto_reality_vision_secrets() {
 
 proto_reality_vision_render_inbound() {
   local u users="" sep=""
-  for u in $(users_list); do
+  for u in $(proto_users reality-vision); do
     users="$users$sep{\"name\": \"$u\", \"uuid\": \"$(uget "$u" uuid)\", \"flow\": \"xtls-rprx-vision\"}"
     sep=", "
   done
@@ -120,7 +120,7 @@ EOF
 
 proto_reality_vision_selftest() {
   local d p u rc
-  d=$(mktemp -d) p=$(random_port tcp) u=$(users_list | head -1)
+  d=$(mktemp -d) p=$(random_port tcp) u=$(proto_users reality-vision | head -1)
   cat >"$d/c.json" <<EOF
 {"log": {"disabled": true},
  "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
