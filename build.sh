@@ -27,6 +27,7 @@ src/lib/warp.sh
 src/lib/argo.sh
 src/lib/nodes.sh
 src/lib/sub.sh
+src/lib/users.sh
 src/lib/doctor.sh
 src/lib/backup.sh
 src/lib/update.sh

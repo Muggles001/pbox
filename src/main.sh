@@ -30,6 +30,7 @@ main() {
     change) cmd_change "$@" ;;
     reset-keys) cmd_reset_keys ;;
     set) cmd_set "$@" ;;
+    user) cmd_user "$@" ;;
     sub) cmd_sub "$@" ;;
     warp) cmd_warp "$@" ;;
     argo) cmd_argo "$@" ;;

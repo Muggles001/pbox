@@ -470,7 +470,8 @@ pbox $PBOX_VERSION
   pbox set addr-mode <split|merged|all> [domain]
   pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
-  pbox sub [setup|show|push|off]
+  pbox user [list|add NAME|del NAME|show NAME|reset NAME]
+  pbox sub [setup|show [NAME]|push|off]
   pbox warp [on|off|all|domains a.com,b.com|status|test]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE

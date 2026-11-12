@@ -187,6 +187,23 @@ echo "中断后的恢复"
 mv "$(E)/state" "$(E)/state.old"
 check "状态目录在替换途中丢失时，下次启动自动复原" bash -c "bash dist/pbox.sh nodes >/dev/null && test -d '$(E)/state' && ! test -e '$(E)/state.old'"
 
+echo "多用户"
+d_uuid=$(sed -n 's/^uuid=//p' "$(E)/state/users/default.env")
+check "添加用户" pbox user add alice --yes
+a_uuid=$(sed -n 's/^uuid=//p' "$(E)/state/users/alice.env")
+check "两人的凭据不同" test "$d_uuid" != "$a_uuid"
+check "内核配置里有两个用户" bash -c "grep -q '$d_uuid' '$(E)/generated/sing-box/10_reality-vision.json' && grep -q '$a_uuid' '$(E)/generated/sing-box/10_reality-vision.json'"
+check "各人的节点文件只含自己的凭据" bash -c "grep -q '$a_uuid' '$(E)/nodes/users/alice/links.txt' && ! grep -q '$d_uuid' '$(E)/nodes/users/alice/links.txt' && ! grep -q '$a_uuid' '$(E)/nodes/users/default/links.txt'"
+check "各人的客户端配置都合法" bash -c "python3 -m json.tool '$(E)/nodes/users/alice/sing-box.json' && python3 -m json.tool '$(E)/nodes/sing-box.json'"
+check "汇总里用用户名区分节点" bash -c "grep -q -- '-alice\$' '$(E)/nodes/links.txt' && grep -q -- '-default\$' '$(E)/nodes/links.txt'"
+check "各人有自己的订阅文件" bash -c "openssl base64 -d -A <'$(E)/nodes/users/alice/sub/v2ray' | diff - '$(E)/nodes/users/alice/links.txt'"
+check "重名被拒绝" bash -c "! bash dist/pbox.sh user add alice --yes"
+check "非法用户名被拒绝" bash -c "! bash dist/pbox.sh user add bad.name --yes && ! bash dist/pbox.sh user add this-name-is-way-too-long --yes"
+check "重置某人的凭据不影响别人" bash -c "bash dist/pbox.sh user reset alice --yes && ! grep -q '$a_uuid' '$(E)/state/users/alice.env' && grep -q '$d_uuid' '$(E)/state/users/default.env'"
+check "删除用户后内核配置里不再有他" bash -c "bash dist/pbox.sh user del alice --yes && ! grep -q alice '$(E)/generated/sing-box/10_reality-vision.json' && ! test -e '$(E)/nodes/users/alice'"
+check "删除后节点名恢复为不带用户名" bash -c "! grep -q -- '-default\$' '$(E)/nodes/links.txt'"
+check "最后一个用户不能删" bash -c "! bash dist/pbox.sh user del default --yes"
+
 echo "端口跳跃"
 check "开启端口跳跃" pbox change hysteria2 hop 30000-30999 --yes
 check "链接里带上跳跃范围" grep -q ':443/?.*&mport=30000-30999#' "$(E)/nodes/links.txt"

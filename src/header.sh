@@ -1,7 +1,7 @@
 set -o pipefail
 umask 027
 
-PBOX_VERSION="0.1.0"
+PBOX_VERSION="0.2.0"
 # 发布仓库（owner/name）。检查更新和在线更新都从这里取。
 PBOX_REPO="${PBOX_REPO:-Muggles001/pbox}"
 

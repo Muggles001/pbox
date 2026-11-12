@@ -15,9 +15,10 @@ node_hosts() {
 node_each() {
   local fn="$1" id u line label host name multi=0 region
   region=$(gget region)
-  [ "$(users_list | wc -l)" -gt 1 ] && multi=1
+  # NODE_USER 非空时只输出那个用户的节点，节点名里也不必再带用户名
+  [ -z "${NODE_USER:-}" ] && [ "$(users_list | wc -l)" -gt 1 ] && multi=1
   for id in $(protos_enabled); do
-    for u in $(users_list); do
+    for u in ${NODE_USER:-$(users_list)}; do
       if declare -F "proto_${id//-/_}_hosts" >/dev/null; then pcall "$id" hosts; else node_hosts; fi | while IFS= read -r line; do
         label="${line%%|*}" host="${line#*|}"
         # 第三段是可选的附加信息，协议模块通过 NODE_EXTRA 读取
@@ -39,16 +40,17 @@ _node_mh() { pcall "$1" client_mihomo "$2" "$3" "$4"; }
 _node_name() { echo "$4"; }
 
 # 所有客户端格式都在本机生成，不调用任何在线转换服务。
-nodes_write() {
-  local names sb tags="" n
-  mkdir -p "$NODES"
-  node_each _node_link >"$NODES/links.txt"
+# nodes_build <目录>：按当前的 NODE_USER 生成链接和两种客户端配置
+nodes_build() {
+  local dir="$1" names sb tags="" n
+  mkdir -p "$dir"
+  node_each _node_link >"$dir/links.txt"
   names=$(node_each _node_name)
   for n in $names; do tags="$tags\"$n\", "; done
   tags="${tags%, }"
   # 各节点片段以 @@ 行分隔，这里换成 JSON 数组元素之间的逗号
   sb=$(node_each _node_sb | awk '/^@@$/{sep=1; next} {if(sep){print "    ,"; sep=0} print}')
-  cat >"$NODES/sing-box.json" <<EOF
+  cat >"$dir/sing-box.json" <<EOF
 {
   "log": {"level": "warn"},
   "inbounds": [
@@ -76,7 +78,20 @@ EOF
     for n in $names; do echo "      - \"$n\""; done
     echo "rules:"
     echo "  - MATCH,proxy"
-  } >"$NODES/mihomo.yaml"
+  } >"$dir/mihomo.yaml"
+}
+
+# 顶层是全部用户的节点；users/<名字>/ 下是每个人各自的一份，订阅按人生成
+nodes_write() {
+  local u
+  NODE_USER=""
+  nodes_build "$NODES"
+  rm -rf "$NODES/users"
+  for u in $(users_list); do
+    NODE_USER="$u"
+    nodes_build "$NODES/users/$u"
+  done
+  NODE_USER=""
   sub_build
   testing || find "$NODES" -type f -exec chmod 600 {} +
 }

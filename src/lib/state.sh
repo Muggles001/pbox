@@ -81,4 +81,5 @@ txn_abort() {
 user_new() { # <用户名>
   uset "$1" uuid "$(gen_uuid)"
   uset "$1" password "$(rand_str "$(rand_int 20 32)")"
+  [ -n "$(uget "$1" sub_key)" ] || uset "$1" sub_key "$(rand_str 12)"
 }

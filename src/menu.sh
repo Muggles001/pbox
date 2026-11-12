@@ -241,6 +241,7 @@ menu_settings() {
     item 6 mset_fw mset_fw_d
     item 7 mset_lang mset_lang_d
     printf "$T_m_fmt" 8 "$(t mset_warp)" "${C_D}[$(onoff "$([ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && echo 1 || echo 0)")] $(t mset_warp_d)${C_0}"
+    item 9 m_uninstall m_uninstall_d
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -265,6 +266,12 @@ menu_settings() {
         cmd_lang >/dev/null
         ;;
       8) menu_warp ;;
+      9)
+        echo
+        (cmd_uninstall)
+        [ -d "$STATE" ] || return 0
+        pause
+        ;;
       *) return 0 ;;
     esac
   done
@@ -332,6 +339,54 @@ menu_log() {
   done
 }
 
+menu_user() {
+  local u="$1"
+  while :; do
+    [ -f "$STATE/users/$u.env" ] || return 0
+    menu_header "$(t m_users) · $u"
+    item 1 mu_show mu_show_d
+    item 2 mu_reset mu_reset_d
+    item 3 mu_del mu_del_d
+    item 0 m_back m_blank
+    choose
+    case "$REPLY" in
+      1) run cmd_user show "$u" ;;
+      2) run cmd_user reset "$u" ;;
+      3) run cmd_user del "$u" ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
+menu_users() {
+  local u n pick
+  while :; do
+    menu_header "$(t m_users)"
+    n=0
+    for u in $(users_list); do
+      n=$((n + 1))
+      printf '  %s  %s\n' "$n" "$u"
+    done
+    printf "$T_m_fmt" a "$(t mu_add)" "${C_D}$(t mu_add_d)${C_0}"
+    item 0 m_back m_blank
+    choose
+    case "$REPLY" in
+      0 | "" | q) return 0 ;;
+      a | A)
+        ask " $(t mu_ask_name)" ""
+        [ -n "$REPLY" ] && run cmd_user add "$REPLY"
+        continue
+        ;;
+    esac
+    n=0 pick=""
+    for u in $(users_list); do
+      n=$((n + 1))
+      [ "$REPLY" = "$n" ] && pick="$u"
+    done
+    [ -n "$pick" ] && menu_user "$pick"
+  done
+}
+
 menu_sub() {
   while :; do
     menu_header "$(t m_sub)"
@@ -369,29 +424,27 @@ cmd_menu() {
     item 1 m_nodes m_nodes_d
     item 2 m_doctor m_doctor_d
     item 3 m_protocols m_protocols_d
-    item 4 m_sub m_sub_d
-    item 5 m_settings m_settings_d
-    item 6 m_update m_update_d
-    item 7 m_backup m_backup_d
-    item 8 m_log m_log_d
-    item 9 m_uninstall m_uninstall_d
+    item 4 m_users m_users_d
+    item 5 m_sub m_sub_d
+    item 6 m_settings m_settings_d
+    item 7 m_update m_update_d
+    item 8 m_backup m_backup_d
+    item 9 m_log m_log_d
     item 0 m_exit m_blank
     choose
     case "$REPLY" in
       1) run cmd_nodes ;;
       2) run cmd_doctor ;;
       3) menu_protocols ;;
-      4) menu_sub ;;
-      5) menu_settings ;;
-      6) run cmd_update ;;
-      7) menu_backup ;;
-      8) menu_log ;;
-      9)
-        echo
-        (cmd_uninstall)
+      4) menu_users ;;
+      5) menu_sub ;;
+      6)
+        menu_settings
         [ -d "$STATE" ] || return 0
-        pause
         ;;
+      7) run cmd_update ;;
+      8) menu_backup ;;
+      9) menu_log ;;
       0 | q) clear 2>/dev/null; return 0 ;;
     esac
   done
