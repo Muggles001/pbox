@@ -389,6 +389,32 @@ menu_users() {
   done
 }
 
+menu_machines() {
+  while :; do
+    menu_header "$(t msub_machines)"
+    printf '  %s%s  %s%s\n\n' "$C_D" "$(t mm_self)" "$(gget region -)" "$C_0"
+    item 1 mm_list mm_list_d
+    item 2 mm_name mm_name_d
+    item 3 mm_invite mm_invite_d
+    item 4 mm_forget mm_forget_d
+    item 0 m_back m_blank
+    choose
+    case "$REPLY" in
+      1) run cmd_sub machines ;;
+      2)
+        ask " $(t mm_ask_name)" ""
+        [ -n "$REPLY" ] && run cmd_sub name "$REPLY"
+        ;;
+      3) run cmd_sub invite ;;
+      4)
+        ask " $(t mm_ask_forget)" ""
+        [ -n "$REPLY" ] && run cmd_sub forget "$REPLY"
+        ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
 menu_sub() {
   while :; do
     menu_header "$(t m_sub)"
@@ -408,9 +434,7 @@ menu_sub() {
       1) run cmd_sub setup ;;
       2) run cmd_sub show ;;
       3) run cmd_sub push ;;
-      4)
-        run cmd_sub machines
-        ;;
+      4) menu_machines ;;
       5) run cmd_sub off ;;
       *) return 0 ;;
     esac

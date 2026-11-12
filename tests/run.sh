@@ -275,6 +275,12 @@ check "别人的订阅里没有她的凭据" bash -c "! openssl base64 -d -A <'$
 check "一台删了她，另一台的还在" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh user del carol --yes && openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray-$c_key' | diff - '$B/etc/pbox/nodes/users/carol/links.txt'"
 check "两台都删了，订阅文件也删掉" bash -c "PBOX_ROOT='$B' bash dist/pbox.sh user del carol --yes && ! test -e '$PBOX_SUB_DIR/v2ray-$c_key' && ! grep -q carol '$PBOX_SUB_DIR/pbox-index'"
 check "第一台的节点变了，合并结果跟着变" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh change hysteria2 port 4443 --yes && openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray' | grep -q ':4443'"
+check "用加入命令加入等同于手动填写" bash -c "
+  code=\$(PBOX_ROOT='$A' bash dist/pbox.sh sub invite | sed -n 's/.*pbox sub join //p') && test -n \"\$code\" &&
+  env -u PBOX_SUB_PROJECT -u PBOX_SUB_WTOKEN -u PBOX_SUB_RTOKEN PBOX_ROOT='$B' bash dist/pbox.sh sub join \"\$code\" --yes &&
+  grep -q '^sub_project=someone/subs$' '$B/etc/pbox/state/global.env'"
+check "残缺的加入命令被拒绝" bash -c "! PBOX_ROOT='$B' bash dist/pbox.sh sub join abc --yes"
+check "修改本机备注后节点名和列表一起变" bash -c "PBOX_ROOT='$B' bash dist/pbox.sh sub name JP-home --yes && openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray' | grep -q '#JP-home-' && PBOX_ROOT='$A' bash dist/pbox.sh sub machines | grep -q JP-home && PBOX_ROOT='$B' bash dist/pbox.sh sub name JP2 --yes"
 check "列出机器" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh sub machines | grep -q JP2"
 check "从另一台上去掉一台机器" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh sub forget JP2 --yes && openssl base64 -d -A <'$PBOX_SUB_DIR/v2ray' | diff - '$A/etc/pbox/nodes/users/default/links.txt' && ! test -e '$PBOX_SUB_DIR'/part-\$(sed -n 's/^sub_machine=//p' '$B/etc/pbox/state/global.env')"
 check "被去掉的机器再次推送会重新加入" bash -c "PBOX_ROOT='$B' bash dist/pbox.sh sub push && test \$(grep -c '^machine ' '$PBOX_SUB_DIR/pbox-index') = 2"

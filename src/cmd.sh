@@ -370,7 +370,8 @@ cmd_set() {
         auto | "") val=$(detect_region) ;;
         off | none) val="" ;;
       esac
-      gset region "$(printf '%s' "$val" | tr -cd 'A-Za-z0-9' | cut -c1-8)"
+      # 它同时是这台机器在节点名和合并订阅里的备注，所以允许写得比地区缩写长一些
+      gset region "$(printf '%s' "$val" | tr -cd 'A-Za-z0-9_-' | sed 's/^-*//' | cut -c1-16)"
       ;;
     update-check)
       case "$val" in on) gset update_check 1 ;; off) gset update_check 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
@@ -476,7 +477,8 @@ pbox $PBOX_VERSION
   pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
   pbox user [list|add NAME [PROTOCOLS]|protocols NAME <LIST|all>|del NAME|show NAME|reset NAME]
-  pbox sub [setup|show [NAME]|push|machines|forget LABEL|off]
+  pbox sub [setup|show [NAME]|push|off]
+  pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]
   pbox warp [on|off|all|domains a.com,b.com|status|test]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE

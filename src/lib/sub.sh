@@ -340,6 +340,32 @@ sub_forget() { # <标签>
   if sub_push "forget:$m"; then say "$(t sub_push_ok)"; else die "$(t sub_push_fail)"; fi
 }
 
+# 生成一条"加入命令"：在另一台机器上粘贴执行，就不用再手动输入项目路径和两个令牌。
+# 命令里含有令牌，只应由用户自己从这台机器复制到那台机器。
+sub_invite() {
+  local code
+  need_root
+  need_installed
+  sub_enabled || die "$(t sub_not_set)"
+  code=$(printf '%s\n%s\n%s\n' "$(sub_get project)" "$(sub_get wtoken)" "$(sub_get rtoken)" | openssl base64 -A)
+  head1 "$(t sub_invite_title)"
+  say "$(t sub_invite_intro)"
+  say ""
+  say "  pbox sub join $code"
+  say ""
+  note "$(t sub_invite_warn)"
+}
+
+sub_join() { # <加入码>
+  local d
+  d=$(printf '%s\n' "${1:-}" | openssl base64 -d -A 2>/dev/null) || d=""
+  PBOX_SUB_PROJECT=$(printf '%s\n' "$d" | sed -n 1p)
+  PBOX_SUB_WTOKEN=$(printf '%s\n' "$d" | sed -n 2p)
+  PBOX_SUB_RTOKEN=$(printf '%s\n' "$d" | sed -n 3p)
+  [ -n "$PBOX_SUB_PROJECT" ] && [ -n "$PBOX_SUB_WTOKEN" ] && [ -n "$PBOX_SUB_RTOKEN" ] || die "$(t sub_join_bad)"
+  sub_setup
+}
+
 read_secret() { # <提示>，结果在 REPLY；不回显
   printf '%s: ' "$1"
   IFS= read -rs REPLY || REPLY=""
@@ -404,7 +430,7 @@ sub_off() {
   say "$(t sub_off_done)"
 }
 
-# pbox sub [setup|show [用户]|push|machines|forget 标签|off]
+# pbox sub [setup|show [用户]|push|machines|name 备注|invite|join 加入码|forget 备注|off]
 cmd_sub() {
   case "${1:-show}" in
     setup) sub_setup ;;
@@ -417,6 +443,9 @@ cmd_sub() {
       if sub_push force; then say "$(t sub_push_ok)"; else die "$(t sub_push_fail)"; fi
       ;;
     machines) need_root; need_installed; sub_machines ;;
+    name) cmd_set region "${2:-auto}" ;;
+    invite) sub_invite ;;
+    join) sub_join "${2:-}" ;;
     forget) sub_forget "${2:-}" ;;
     off) sub_off ;;
     *) cmd_help ;;
