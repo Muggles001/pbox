@@ -37,6 +37,14 @@ for lang in zh en; do
 done
 check "中英文案的键一致" diff <(grep -oE 'T_[a-z0-9_]+=' src/i18n/zh.sh | sort) <(grep -oE 'T_[a-z0-9_]+=' src/i18n/en.sh | sort)
 
+echo "版本比较"
+eval "$(sed -n '/^ver_newer()/,/^}/p' src/lib/update.sh)"
+check "线上更新才算有更新" ver_newer v0.3.0 0.2.0
+check "多位数按数值比较" ver_newer v0.10.0 0.9.9
+vn_not() { ! ver_newer "$@"; }
+check "版本相同不算" vn_not v0.3.0 0.3.0
+check "本机比线上新时不提示" vn_not v0.2.0 0.3.0
+
 echo "安装（推荐档）"
 new_root
 check "无人值守安装成功" pbox install --yes

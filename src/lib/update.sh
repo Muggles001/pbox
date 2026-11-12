@@ -3,6 +3,19 @@ update_latest_tag() { # [超时秒数]
     sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1
 }
 
+# 只有线上的版本确实比本机新才算有更新。本机比线上新（例如装的是尚未发布的版本）时不能提示，
+# 否则"更新"会变成降级。
+ver_newer() { # <线上标签，如 v1.2.3> <本机版本>
+  local a="${1#v}" b="$2" i x y
+  for i in 1 2 3; do
+    x=$(printf '%s' "$a" | cut -d. -f"$i" | tr -cd '0-9')
+    y=$(printf '%s' "$b" | cut -d. -f"$i" | tr -cd '0-9')
+    [ "${x:-0}" -gt "${y:-0}" ] && return 0
+    [ "${x:-0}" -lt "${y:-0}" ] && return 1
+  done
+  return 1
+}
+
 # 打开菜单时调用：每天最多联网一次，两秒超时，只提示不更新。可用 pbox set update-check off 关闭。
 update_notice() {
   local cache="$LIBDIR/update.cache" now last tag
@@ -17,7 +30,7 @@ update_notice() {
     [ -n "$tag" ] && kv_set "$cache" tag "$tag" 2>/dev/null
   fi
   tag=$(kv_get "$cache" tag)
-  if [ -n "$tag" ] && [ "$tag" != "v$PBOX_VERSION" ]; then note "$(t upd_available "$tag")"; fi
+  if [ -n "$tag" ] && ver_newer "$tag" "$PBOX_VERSION"; then note "$(t upd_available "$tag")"; fi
   return 0
 }
 
@@ -29,7 +42,7 @@ cmd_update() {
   [ -n "$PBOX_REPO" ] || die "$(t upd_norepo)"
   tag=$(update_latest_tag) || tag=""
   [ -n "$tag" ] || die "$(t upd_fail)"
-  if [ "$tag" = "v$PBOX_VERSION" ]; then
+  if ! ver_newer "$tag" "$PBOX_VERSION"; then
     say "$(t upd_latest "$PBOX_VERSION")"
   else
     say "$(t upd_found "$PBOX_VERSION" "$tag")"
