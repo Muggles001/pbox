@@ -389,29 +389,6 @@ menu_users() {
   done
 }
 
-# 多用户时先选是谁的订阅地址
-menu_sub_show() {
-  local u n=0 pick=""
-  if [ "$(users_list | wc -l)" -le 1 ]; then
-    run cmd_sub show
-    return 0
-  fi
-  menu_header "$(t msub_show)"
-  for u in $(users_list); do
-    n=$((n + 1))
-    printf '  %s  %s\n' "$n" "$u"
-  done
-  item 0 m_back m_blank
-  choose
-  n=0
-  for u in $(users_list); do
-    n=$((n + 1))
-    [ "$REPLY" = "$n" ] && pick="$u"
-  done
-  [ -n "$pick" ] && run cmd_sub show "$pick"
-  return 0
-}
-
 menu_sub() {
   while :; do
     menu_header "$(t m_sub)"
@@ -429,7 +406,7 @@ menu_sub() {
     choose
     case "$REPLY" in
       1) run cmd_sub setup ;;
-      2) menu_sub_show ;;
+      2) run cmd_sub show ;;
       3) run cmd_sub push ;;
       4)
         run cmd_sub machines

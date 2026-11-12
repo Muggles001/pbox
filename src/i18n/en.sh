@@ -234,7 +234,7 @@ i18n_en() {
   T_msub_setup='Set up'
   T_msub_setup_d='enter the repo and two tokens, or replace them'
   T_msub_show='Links'
-  T_msub_show_d='subscription link for each client'
+  T_msub_show_d='everyone\x27s subscription links, grouped by name'
   T_msub_push='Push now'
   T_msub_push_d='changes are normally pushed automatically'
   T_msub_off='Turn off'

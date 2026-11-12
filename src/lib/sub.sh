@@ -279,16 +279,19 @@ sub_url() { # <仓库里的文件名>
   printf '%s/%s/raw?ref=%s&private_token=%s' "$(sub_api "$(sub_get project)")" "$1" "$(sub_get branch main)" "$(sub_get rtoken)"
 }
 
+# 不指定用户时一屏列出所有人的订阅地址：管理的人只有一个，不需要先"切换"到谁
 sub_show() { # [用户]
-  local u="${1:-}" sfx
+  local u sfx
   sub_enabled || die "$(t sub_not_set)"
-  [ -n "$u" ] || u=$(users_list | sed -n 1p)
-  [ -f "$STATE/users/$u.env" ] || die "$(t user_missing "$u")"
-  sfx=$(sub_suffix "$u")
-  head1 "$(t sub_urls_title) · $u"
-  printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_v2ray)" "$C_0" "$(sub_url "v2ray$sfx")"
-  printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_clash)" "$C_0" "$(sub_url "clash$sfx")"
-  printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_singbox)" "$C_0" "$(sub_url "singbox$sfx")"
+  [ -z "${1:-}" ] || [ -f "$STATE/users/$1.env" ] || die "$(t user_missing "$1")"
+  for u in ${1:-$(users_list)}; do
+    sfx=$(sub_suffix "$u")
+    head1 "$(t sub_urls_title) · $u"
+    printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_v2ray)" "$C_0" "$(sub_url "v2ray$sfx")"
+    printf '  %s%s%s\n  %s\n\n' "$C_B" "$(t sub_c_clash)" "$C_0" "$(sub_url "clash$sfx")"
+    printf '  %s%s%s\n  %s\n' "$C_B" "$(t sub_c_singbox)" "$C_0" "$(sub_url "singbox$sfx")"
+  done
+  say ""
   note "$(t sub_url_note)"
   [ "$(users_list | wc -l)" -gt 1 ] && note "$(t sub_shared_note)"
   return 0

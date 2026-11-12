@@ -62,7 +62,6 @@ cmd_user() {
       uset "$u" protocols "$REPLY"
       edit_end
       # 订阅用的是同一个只读令牌，用户之间不是严格隔离，这里说清楚
-      sub_enabled && note "$(t sub_shared_note)"
       user_show "$u"
       ;;
     del)

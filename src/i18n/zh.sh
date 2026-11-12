@@ -234,7 +234,7 @@ i18n_zh() {
   T_msub_setup='开启订阅'
   T_msub_setup_d='填入仓库和两个令牌，或更换它们'
   T_msub_show='订阅地址'
-  T_msub_show_d='各客户端对应的订阅链接'
+  T_msub_show_d='每个人的订阅链接，按名字分段列出'
   T_msub_push='立即推送'
   T_msub_push_d='平时节点有变化会自动推送'
   T_msub_off='关闭订阅'
