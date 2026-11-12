@@ -146,7 +146,8 @@ proto_reality_vision_doctor() {
     return 1
   fi
   sni=$(pget reality-vision sni)
-  if reality_check "$sni" >/dev/null; then
+  # 对外的探测偶尔会因为网络抖动失败一次，所以再试一次才下结论
+  if reality_check "$sni" >/dev/null || { sleep 2; reality_check "$sni" >/dev/null; }; then
     ok "$(t d_reality_ok "$sni")"
   else
     bad "$(t d_reality_bad "$sni")"
