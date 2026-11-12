@@ -21,7 +21,7 @@ i18n_zh() {
   T_bad_port='端口无效：%s'
   T_bad_domain='域名无效：%s'
   T_reality_port_note='443 端口已被占用，Reality 改用 %s。伪装效果会比 443 略差。'
-  T_reality_picking='正在挑选伪装目标（逐个实测，约需十几秒）'
+  T_reality_picking='正在挑选伪装目标（逐个实际握手验证，约需半分钟）'
   T_reality_none='没有找到可用的伪装目标。请检查服务器能否访问外网，或用 pbox change reality-vision sni <域名> 指定一个。'
   T_reality_bad_target='%s 不适合做伪装目标：需要支持 TLS 1.3 和 HTTP/2、证书有效、首页不跳转、不在 Cloudflare 后面。'
   T_keygen_fail='生成密钥失败。'

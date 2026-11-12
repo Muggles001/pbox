@@ -64,7 +64,7 @@ for k in private_key public_key short_id; do
 done
 check "两次安装的用户凭据不同" sh -c "! diff '$first_root/etc/pbox/state/users/default.env' '$(E)/state/users/default.env'"
 check "两次安装的证书指纹不同" bash -c "! diff <(grep ^cert_sha256= '$first_root/etc/pbox/state/protocols/hysteria2.env') <(grep ^cert_sha256= '$(E)/state/protocols/hysteria2.env')"
-check "源码里没有写死的 UUID" sh -c "! grep -rEq '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' src"
+check "源码里没有写死的 UUID（本机回环握手测试用的占位值除外）" sh -c "! grep -rE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' src | grep -v '00000000-0000-4000-8000-000000000001' | grep -q ."
 
 echo "端口占用与冲突"
 new_root

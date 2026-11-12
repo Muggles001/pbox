@@ -21,7 +21,7 @@ i18n_en() {
   T_bad_port='Invalid port: %s'
   T_bad_domain='Invalid domain: %s'
   T_reality_port_note='Port 443 is taken, so Reality will use %s. Camouflage is slightly weaker than on 443.'
-  T_reality_picking='Picking a camouflage target (testing candidates, about ten seconds)'
+  T_reality_picking='Picking a camouflage target (each candidate gets a real handshake, about half a minute)'
   T_reality_none='No usable camouflage target. Check outbound connectivity, or set one with pbox change reality-vision sni <domain>.'
   T_reality_bad_target='%s is not a good target: it needs TLS 1.3 and HTTP/2, a valid certificate, no redirect on the home page, and must not sit behind Cloudflare.'
   T_keygen_fail='Key generation failed.'

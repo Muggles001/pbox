@@ -1,12 +1,12 @@
 # 内置候选都是有大量正常访问的真实网站，这份名单公开不构成问题。
-# 这 47 个都在 2026-11 实测通过过筛选（美国与日本的机房各测过一部分）。是否可用仍以本机实测为准；可用 /etc/pbox/reality-candidates.txt 整份替换（每行一个域名）。
-REALITY_CANDIDATES="www.cisco.com www.asus.com www.toyota.com www.bosch.com www.adobe.com www.mozilla.org
+# 这 44 个都在 2026-11 实测通过：既满足下面的基本条件，也真的作为 Reality 目标完成过握手。是否可用仍以本机实测为准；可用 /etc/pbox/reality-candidates.txt 整份替换（每行一个域名）。
+REALITY_CANDIDATES="www.cisco.com www.asus.com www.toyota.com www.adobe.com www.mozilla.org
 www.python.org www.debian.org www.rakuten.co.jp www.yahoo.co.jp www.airbnb.com
 www.nikon.com www.ricoh.com www.sharp.com www.yamaha.com www.docomo.ne.jp www.softbank.jp www.boeing.com
 www.fedex.com www.ups.com www.walmart.com www.target.com www.nasa.gov www.kernel.org www.apache.org
 www.postgresql.org www.mysql.com go.dev www.php.net www.ruby-lang.org www.docker.com www.jetbrains.com
 www.atlassian.com www.dropbox.com www.wikipedia.org www.bbc.com www.nhk.or.jp www.nikkei.com www.ucla.edu
-www.utoronto.ca www.ubc.ca www.nus.edu.sg www.kth.se www.ti.com www.arm.com www.micron.com www.westerndigital.com"
+www.utoronto.ca www.ubc.ca www.nus.edu.sg www.ti.com www.arm.com www.westerndigital.com"
 
 reality_candidates() {
   if [ -f "$ETC/reality-candidates.txt" ]; then
@@ -32,7 +32,51 @@ reality_check() {
   case "$res" in 200\ *) ;; *) return 1 ;; esac
   # 目标在 CDN 后面时，本机会被当成那家 CDN 的转发点。这里只能识别 Cloudflare 一家。
   curl -s --max-time 5 "https://$d/cdn-cgi/trace" 2>/dev/null | grep -q '^colo=' && return 1
+  # 以上条件都满足的网站，仍有少数拿来做 Reality 目标时握手不成功（实测约十六分之一）。
+  # 所以最后真的握手一次：通过了才算可用。
+  if [ -x "$BINDIR/sing-box" ]; then reality_handshake_ok "$d" || return 1; fi
   echo "${res#* }"
+}
+
+# 在本机临时起一对 Reality 服务端和客户端，以 <域名> 为伪装目标，经由它实际访问一次外网。
+reality_handshake_ok() {
+  local sni="$1" d kp prv pub sp cp sport cport i rc=1
+  d=$(mktemp -d) || return 1
+  kp=$("$BINDIR/sing-box" generate reality-keypair 2>/dev/null)
+  prv=$(printf '%s\n' "$kp" | sed -n 's/^PrivateKey: *//p')
+  pub=$(printf '%s\n' "$kp" | sed -n 's/^PublicKey: *//p')
+  sport=$(random_port tcp) cport=$(random_port tcp)
+  cat >"$d/s.json" <<EOF
+{"log": {"disabled": true},
+ "inbounds": [{"type": "vless", "listen": "127.0.0.1", "listen_port": $sport,
+  "users": [{"uuid": "00000000-0000-4000-8000-000000000001", "flow": "xtls-rprx-vision"}],
+  "tls": {"enabled": true, "server_name": "$sni",
+   "reality": {"enabled": true, "handshake": {"server": "$sni", "server_port": 443}, "private_key": "$prv", "short_id": ["ab12"]}}}],
+ "outbounds": [{"type": "direct"}]}
+EOF
+  cat >"$d/c.json" <<EOF
+{"log": {"disabled": true},
+ "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $cport}],
+ "outbounds": [{"type": "vless", "server": "127.0.0.1", "server_port": $sport,
+  "uuid": "00000000-0000-4000-8000-000000000001", "flow": "xtls-rprx-vision",
+  "tls": {"enabled": true, "server_name": "$sni", "utls": {"enabled": true, "fingerprint": "chrome"},
+   "reality": {"enabled": true, "public_key": "$pub", "short_id": "ab12"}}}]}
+EOF
+  "$BINDIR/sing-box" run -c "$d/s.json" -D "$d" >/dev/null 2>&1 &
+  sp=$!
+  "$BINDIR/sing-box" run -c "$d/c.json" -D "$d" >/dev/null 2>&1 &
+  cp=$!
+  for i in 1 2 3; do
+    sleep 1
+    if curl -s -o /dev/null -m 6 -x "socks5h://127.0.0.1:$cport" https://www.cloudflare.com/cdn-cgi/trace; then
+      rc=0
+      break
+    fi
+  done
+  kill "$sp" "$cp" 2>/dev/null
+  wait "$sp" "$cp" 2>/dev/null
+  rm -rf "$d"
+  return $rc
 }
 
 # 随机顺序实测候选，凑够 5 个可用的就停，从最快的 3 个里随机取一个。
