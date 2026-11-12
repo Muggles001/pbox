@@ -46,6 +46,18 @@ conflict_check() {
       done
     done
   done
+  # H3：已开启端口跳跃时，新加或改了端口的 UDP 协议不能落在跳跃范围里
+  port=$(pget hysteria2 hop_range)
+  if [ -n "$port" ] && a=$(hop_overlaps "${port%-*}" "${port#*-}"); then
+    [ "$ASSUME_YES" = 1 ] && [ -n "$(kv_get "$STATE/protocols/$a.env" port)" ] && [ "$(pget "$a" port)" != "$(kv_get "$STATE/protocols/$a.env" port)" ] &&
+      die "$(t hop_overlap "$port" "$(pmeta "$a" title)" "$(pget "$a" port)")"
+    # 端口是脚本自动选的：换一个不在范围里的
+    b=0
+    while hop_overlaps "${port%-*}" "${port#*-}" >/dev/null && [ "$b" -lt 30 ]; do
+      pset "$a" port "$(random_port udp)"
+      b=$((b + 1))
+    done
+  fi
   # H12：端口被 pbox 以外的程序占用。自己正在用的端口不算。
   for a in $(protos_enabled); do
     l4=$(pmeta "$a" l4)

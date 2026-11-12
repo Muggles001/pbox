@@ -153,7 +153,7 @@ check "链接用隧道域名作地址和 Host" grep -q '@example-test.trycloudfl
 check "设置优选后多出一个优选节点，直连的仍保留" bash -c "bash dist/pbox.sh change vless-ws cdn www.visa.com.sg --yes && grep -q '@www.visa.com.sg:443?.*sni=example-test.trycloudflare.com.*Argo-Temp-Pref' '$(E)/nodes/links.txt' && grep -q '@example-test.trycloudflare.com:443.*Argo-Temp\$' '$(E)/nodes/links.txt'"
 check "加上固定隧道后共四个 Argo 节点" bash -c "PBOX_ARGO_TOKEN=eyJhIjoiMTIzNDU2Nzg5MGFiY2RlZiJ9 bash dist/pbox.sh argo fixed t.example.org --yes && test \"\$(grep -c Argo- '$(E)/nodes/links.txt')\" -eq 4 && grep -q 'sni=t.example.org.*Argo-Fixed-Pref' '$(E)/nodes/links.txt'"
 check "令牌不出现在生成的节点和内核配置里" bash -c "! grep -rq eyJhIjoi '$(E)/nodes' '$(E)/generated'"
-check "交互设置：先填令牌、再填域名" bash -c "printf 'eyJhIjoiYWJjZGVmMTIzNDU2Nzg5MCJ9\nt2.example.org\n' | bash dist/pbox.sh argo fixed && grep -q 'sni=t2.example.org' '$(E)/nodes/links.txt' && grep -q 'localhost:' <(printf 'eyJhIjoiYWJjZGVmMTIzNDU2Nzg5MCJ9\nt2.example.org\n' | bash dist/pbox.sh argo fixed)"
+check "交互设置：先填令牌、再填域名" bash -c "printf 'eyJhIjoiYWJjZGVmMTIzNDU2Nzg5MCJ9\nt2.example.org\n' | bash dist/pbox.sh argo fixed >'$PBOX_ROOT/out.txt' 2>&1 && grep -q 'sni=t2.example.org' '$(E)/nodes/links.txt' && grep -q 'localhost:' '$PBOX_ROOT/out.txt'"
 check "非法令牌被拒绝" bash -c "! PBOX_ARGO_TOKEN='bad token' bash dist/pbox.sh argo fixed t.example.org --yes"
 check "可以只留固定隧道" bash -c "bash dist/pbox.sh argo temp off --yes && ! grep -q Argo-Temp '$(E)/nodes/links.txt'"
 check "两个隧道不能都关" bash -c "! bash dist/pbox.sh argo fixed off --yes"
@@ -169,6 +169,23 @@ check "服务端、链接、两种客户端配置都带上混淆" bash -c "grep 
 check "关闭混淆后不留痕迹" bash -c "bash dist/pbox.sh change hysteria2 obfs off --yes && ! grep -rq salamander '$(E)/generated' '$(E)/nodes'"
 check "非法的 WS 路径被拒绝" bash -c "bash dist/pbox.sh add vless-ws --yes && ! bash dist/pbox.sh change vless-ws path 'no slash' --yes"
 check "可以自定义 WS 路径" bash -c "bash dist/pbox.sh change vless-ws path /my-path_1 --yes && grep -q '\"path\": \"/my-path_1\"' '$(E)/generated/sing-box/10_vless-ws.json' && grep -q 'path=%2Fmy-path_1' '$(E)/nodes/links.txt' && bash dist/pbox.sh del vless-ws --yes"
+
+echo "TUIC 与 AnyTLS"
+check "添加 TUIC" pbox add tuic --yes
+check "添加 AnyTLS" pbox add anytls --yes
+check "两个入站都是合法 JSON" bash -c "python3 -m json.tool '$(E)/generated/sing-box/10_tuic.json' && python3 -m json.tool '$(E)/generated/sing-box/10_anytls.json'"
+check "AnyTLS 没有去抢 Reality 的 443" bash -c "! grep -qx port=443 '$(E)/state/protocols/anytls.env'"
+check "TUIC 没有去抢 Hysteria2 的 UDP 443" bash -c "! grep -qx port=443 '$(E)/state/protocols/tuic.env'"
+check "链接、Clash、sing-box 配置里都有这两个节点" bash -c "grep -q '^tuic://' '$(E)/nodes/links.txt' && grep -q '^anytls://' '$(E)/nodes/links.txt' && grep -q 'type: tuic' '$(E)/nodes/mihomo.yaml' && grep -q 'type: anytls' '$(E)/nodes/mihomo.yaml' && python3 -m json.tool '$(E)/nodes/sing-box.json'"
+check "Clash 与 sing-box 配置里用的是指纹固定" bash -c "! grep -q skip-cert-verify '$(E)/nodes/mihomo.yaml' && [ \"\$(grep -c certificate_public_key_sha256 '$(E)/nodes/sing-box.json')\" -ge 3 ]"
+check "可以改 TUIC 的拥塞算法" bash -c "bash dist/pbox.sh change tuic cc cubic --yes && grep -q '\"congestion_control\": \"cubic\"' '$(E)/generated/sing-box/10_tuic.json'"
+check "非法的拥塞算法被拒绝" bash -c "! bash dist/pbox.sh change tuic cc fast --yes"
+check "开启端口跳跃时自动避开 TUIC 的端口" bash -c "bash dist/pbox.sh change hysteria2 hop on --yes && bash dist/pbox.sh change hysteria2 hop off --yes"
+check "删除这两个协议" bash -c "bash dist/pbox.sh del tuic --yes && bash dist/pbox.sh del anytls --yes"
+
+echo "中断后的恢复"
+mv "$(E)/state" "$(E)/state.old"
+check "状态目录在替换途中丢失时，下次启动自动复原" bash -c "bash dist/pbox.sh nodes >/dev/null && test -d '$(E)/state' && ! test -e '$(E)/state.old'"
 
 echo "端口跳跃"
 check "开启端口跳跃" pbox change hysteria2 hop 30000-30999 --yes

@@ -17,6 +17,7 @@ main() {
   set -- $args
   cmd="${1:-menu}"
   [ $# -gt 0 ] && shift
+  state_recover
   lang_init
   case "$cmd" in
     menu) cmd_menu ;;

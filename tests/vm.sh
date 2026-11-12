@@ -79,6 +79,8 @@ else
   check "开启端口跳跃后转发规则存在" bash -c "$P change hysteria2 hop on --yes && (nft list table inet pbox_hop || iptables -t nat -S PREROUTING | grep pbox-hop)"
   check "开启端口跳跃后体检仍全过" $P doctor
   check "关闭端口跳跃后规则消失" bash -c "$P change hysteria2 hop off --yes && ! nft list table inet pbox_hop 2>/dev/null && ! (iptables -t nat -S PREROUTING 2>/dev/null | grep -q pbox-hop)"
+  check "添加 TUIC 与 AnyTLS 后体检全过（真实内核、真实连接）" bash -c "$P add tuic --yes && $P add anytls --yes && sleep 2 && $P doctor"
+  check "删除它们" bash -c "$P del tuic --yes && $P del anytls --yes"
   export PBOX_BACKUP_PASSWORD=vm-test
   check "备份" $P backup /tmp/pbox-vm.bin --yes
   check "卸载" $P uninstall --yes

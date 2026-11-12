@@ -17,6 +17,8 @@ src/cores/core.sh
 src/protocols/reality-vision.sh
 src/protocols/hysteria2.sh
 src/protocols/vless-ws.sh
+src/protocols/tuic.sh
+src/protocols/anytls.sh
 src/lib/conflict.sh
 src/lib/render.sh
 src/lib/firewall.sh

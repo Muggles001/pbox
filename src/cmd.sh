@@ -92,7 +92,7 @@ install_customize() {
   for id in $PROTO_ALL; do
     confirm "  $(t inst_enable_q "$(pmeta "$id" title)")" || continue
     picked="$picked $id"
-    case "$id" in reality-vision) k=PBOX_REALITY_PORT ;; hysteria2) k=PBOX_HY2_PORT ;; *) k="" ;; esac
+    case "$id" in reality-vision) k=PBOX_REALITY_PORT ;; hysteria2) k=PBOX_HY2_PORT ;; tuic) k=PBOX_TUIC_PORT ;; anytls) k=PBOX_ANYTLS_PORT ;; *) k="" ;; esac
     [ -n "$k" ] || continue
     ask "  $(t inst_port_q)" ""
     if [ -n "$REPLY" ]; then
@@ -231,6 +231,8 @@ cmd_add() {
   cores_ensure || { txn_abort; die "$(t dl_abort)"; }
   pcall "$id" secrets
   edit_end
+  [ "$(pmeta "$id" link_insecure)" = 1 ] && [ "$DRY_RUN" != 1 ] && note "$(t note_link_insecure "$(pmeta "$id" title)")"
+  return 0
 }
 
 cmd_del() {
@@ -264,6 +266,10 @@ cmd_change() {
         *) valid_domain "$val" || printf '%s' "$val" | grep -Eq '^[0-9a-fA-F:.]+$' || { txn_abort; die "$(t bad_domain "$val")"; } ;;
       esac
       pset vless-ws cdn_addr "$val"
+      ;;
+    cc)
+      [ "$id" = tuic ] || { txn_abort; die "$(t change_usage)"; }
+      case "$val" in bbr | cubic | new_reno) pset tuic cc "$val" ;; *) txn_abort; die "$(t bad_cc)" ;; esac
       ;;
     obfs)
       [ "$id" = hysteria2 ] || { txn_abort; die "$(t change_usage)"; }
@@ -456,6 +462,7 @@ pbox $PBOX_VERSION
   pbox change hysteria2 hop <on|off|A-B>
   pbox change hysteria2 obfs <on|off>
   pbox change vless-ws path <auto|/xxx>
+  pbox change tuic cc <bbr|cubic|new_reno>
   pbox change vless-ws cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
   pbox change reality-vision sni <domain|auto>

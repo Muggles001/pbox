@@ -23,6 +23,7 @@
 |---|---|
 | VLESS-Reality-Vision | 默认主力，不需要域名 |
 | Hysteria2 | 默认提速，可开端口跳跃和流量混淆 |
+| TUIC、AnyTLS | 可选。TUIC 基于 UDP；AnyTLS 基于 TCP，需要较新的客户端 |
 | VLESS-WS-Argo | 经 Cloudflare 隧道，不需要域名、不开放端口；支持临时与固定隧道、优选地址 |
 | 订阅 | 推送到你自己的 GitLab 私有仓库，覆盖 v2rayN/NG、Clash 系、sing-box 等客户端 |
 | WARP 出口 | 目标网站不欢迎机房 IP 时使用，可按网站分流 |

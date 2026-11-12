@@ -126,6 +126,17 @@ rollback() {
   for core in xray singbox; do core_sync "$core"; done
 }
 
+# 上一次提交若在替换途中被强行终止，这里把目录复原到替换之前。每次启动时调用。
+state_recover() {
+  [ -d "$ETC" ] || return 0
+  if [ ! -d "$STATE" ] && [ -d "$STATE.old" ]; then mv "$STATE.old" "$STATE"; fi
+  if [ ! -d "$GEN" ] && [ -d "$GEN.old" ]; then mv "$GEN.old" "$GEN"; fi
+  # 状态已换成新的而生成物还没跟上：按现有状态重新渲染一次
+  if [ -d "$STATE" ] && [ -d "$GEN.old" ] && [ -d "$GEN" ]; then rm -rf "$GEN.old"; fi
+  [ -d "$STATE.old" ] && [ -d "$STATE" ] && rm -rf "$STATE.old"
+  return 0
+}
+
 # 提交事务：渲染 → 校验 → 比对 → 备份现状 → 替换 → 只动有变化的内核 → 探活，失败回滚。
 # 返回 0 表示已生效；非 0 表示未生效且已恢复原状。
 txn_commit() {
@@ -152,10 +163,17 @@ txn_commit() {
   mkdir -p "$PREV"
   [ -d "$STATE" ] && cp -R "$STATE" "$PREV/state"
   [ -d "$GEN" ] && cp -R "$GEN" "$PREV/generated"
-  rm -rf "$STATE" "$GEN"
+  # 替换的这几步不可被打断：SSH 断线、管道关闭、Ctrl-C 都先忽略，换完再恢复。
+  # 每一步都是改名而不是"先删后放"，万一进程还是被强行终止，state_recover 能据此复原。
+  trap '' HUP PIPE INT TERM
+  rm -rf "$STATE.old" "$GEN.old"
+  [ -d "$STATE" ] && mv "$STATE" "$STATE.old"
   mv "$new/state" "$STATE"
+  [ -d "$GEN" ] && mv "$GEN" "$GEN.old"
   mv "$new/generated" "$GEN"
-  rm -rf "$new"
+  rm -rf "$STATE.old" "$GEN.old" "$new"
+  trap 'unlock; exit 130' INT TERM
+  trap - HUP PIPE
   CUR="$STATE"
   manifest_add dir "$ETC"
   fix_perms
