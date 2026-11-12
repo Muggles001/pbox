@@ -53,8 +53,10 @@ reality_pick() {
     sleep 3
   done
   [ "$n" -gt 0 ] || return 1
-  printf '%s' "$passed" | sort -n | head -3 | shuffle | head -1 | awk '{print $2}'
+  # 用 sed 取前几行而不是 head：head 读够就退出，会让前面的命令收到管道关闭的信号，
+  # 在开启了 pipefail 的情况下整条管道会被判为失败，表现为偶发的"没有找到可用的伪装目标"
+  printf '%s' "$passed" | sort -n | sed -n '1,3p' | shuffle | sed -n '1p' | awk '{print $2}'
 }
 
 # 自签证书用的域名：只需要像个正常域名，不需要实测。
-random_sni() { reality_candidates | shuffle | head -1; }
+random_sni() { reality_candidates | shuffle | sed -n '1p'; }
