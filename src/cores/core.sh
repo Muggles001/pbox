@@ -110,7 +110,11 @@ core_validate() { # <内核> <配置目录>，错误信息输出到标准输出
   b=$(core_bin "$1")
   [ -x "$b" ] || { testing && return 0; return 1; }
   case "$1" in
-    nginx) nginx_validate "$2" ;;
+    nginx)
+      # 测试时的配置里路径都是假的，机器上即使装了 Nginx 也不能拿来校验
+      testing && return 0
+      nginx_validate "$2"
+      ;;
     xray) "$b" run -test -confdir "$2" 2>&1 ;;
     singbox) "$b" check -C "$2" 2>&1 ;;
   esac
