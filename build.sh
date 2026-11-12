@@ -24,6 +24,7 @@ src/lib/render.sh
 src/lib/firewall.sh
 src/lib/hop.sh
 src/lib/warp.sh
+src/lib/bbr.sh
 src/lib/argo.sh
 src/lib/nodes.sh
 src/lib/sub.sh

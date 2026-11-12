@@ -296,6 +296,14 @@ check "关闭订阅时撤出本机的节点" bash -c "PBOX_ROOT='$B' bash dist/p
 check "最后一台卸载后仓库里不留订阅文件" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh uninstall --yes && test -z \"\$(ls '$PBOX_SUB_DIR')\""
 unset PBOX_SUB_DIR PBOX_SUB_PROJECT PBOX_SUB_WTOKEN PBOX_SUB_RTOKEN PBOX_TEST_REGION
 
+echo "BBR"
+new_root
+pbox install --yes >/dev/null 2>&1
+check "开启后写入自己的参数文件并登记到清单" bash -c "bash dist/pbox.sh bbr on && grep -q 'tcp_congestion_control=bbr' '$PBOX_ROOT/etc/sysctl.d/99-pbox-bbr.conf' && grep -q '99-pbox-bbr.conf' '$(E)/manifest'"
+check "关闭后文件与清单记录都删除" bash -c "bash dist/pbox.sh bbr off && ! test -e '$PBOX_ROOT/etc/sysctl.d/99-pbox-bbr.conf' && ! grep -q '99-pbox-bbr.conf' '$(E)/manifest'"
+check "内核不支持时拒绝且不留文件" bash -c "! PBOX_TEST_BBR=0 bash dist/pbox.sh bbr on && ! test -e '$PBOX_ROOT/etc/sysctl.d/99-pbox-bbr.conf'"
+check "卸载时一并撤销" bash -c "bash dist/pbox.sh bbr on && bash dist/pbox.sh uninstall --yes && ! test -e '$PBOX_ROOT/etc/sysctl.d/99-pbox-bbr.conf'"
+
 echo "卸载"
 new_root
 pbox install --yes >/dev/null 2>&1

@@ -33,6 +33,7 @@ main() {
     user) cmd_user "$@" ;;
     sub) cmd_sub "$@" ;;
     warp) cmd_warp "$@" ;;
+    bbr) cmd_bbr "$@" ;;
     argo) cmd_argo "$@" ;;
     firewall) cmd_firewall ;;
     rollback) cmd_rollback ;;

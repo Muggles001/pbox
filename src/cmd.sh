@@ -167,6 +167,7 @@ cmd_install() {
 # 卸载按安装清单逐项撤销，全程不需要联网。
 do_uninstall() {
   local kind val
+  bbr_ours && bbr_off >/dev/null
   sub_leave || warn "$(t sub_leave_fail)"
   if [ -f "$MANIFEST" ]; then
     grep '^svc	' "$MANIFEST" | cut -f2 | while read -r val; do svc_remove "$val"; done
@@ -480,6 +481,7 @@ pbox $PBOX_VERSION
   pbox sub [setup|show [NAME]|push|off]
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]
   pbox warp [on|off|all|domains a.com,b.com|status|test]
+  pbox bbr [on|off|status]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE
   pbox update   pbox uninstall   pbox lang

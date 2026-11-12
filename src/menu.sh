@@ -28,13 +28,15 @@ onoff() { if [ "$1" = 1 ]; then t on; else t off; fi; }
 item() { printf "$T_m_fmt" "$1" "$(t "$2")" "$C_D$(t "$3")$C_0"; }
 
 menu_header() {
-  local id core label st
+  local id core label st nu
   clear 2>/dev/null || printf '\033c'
   st="${C_G}● $(t m_running)${C_0}"
   for core in $(cores_needed); do svc active "$(core_svc "$core")" || st="${C_R}● $(t m_stopped)${C_0}"; done
   printf ' %spbox %s%s    %s\n' "$C_B" "$PBOX_VERSION" "$C_0" "$st"
   rule
   printf ' %s   %s      %s   %s\n' "$(t mh_region)" "$(gget region -)" "$(t mh_mem)" "$(mem_usage)"
+  nu=$(net_usage)
+  [ -n "$nu" ] && printf ' %s   %s  %s%s%s\n' "$(t mh_net)" "$nu" "$C_D" "$(t mh_net_since)" "$C_0"
   [ -n "$(gget ip4)" ] && printf ' IPv4   %s\n' "$(gget ip4)"
   [ -n "$(gget ip6)" ] && printf ' IPv6   %s\n' "$(gget ip6)"
   label=$(t plan_proto)
@@ -241,7 +243,8 @@ menu_settings() {
     item 6 mset_fw mset_fw_d
     item 7 mset_lang mset_lang_d
     printf "$T_m_fmt" 8 "$(t mset_warp)" "${C_D}[$(onoff "$([ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && echo 1 || echo 0)")] $(t mset_warp_d)${C_0}"
-    item 9 m_uninstall m_uninstall_d
+    printf "$T_m_fmt" 9 "$(t mset_bbr)" "${C_D}[$(onoff "$([ "$(bbr_cur)" = bbr ] && echo 1 || echo 0)")] $(t mset_bbr_d)${C_0}"
+    item u m_uninstall m_uninstall_d
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -267,6 +270,11 @@ menu_settings() {
         ;;
       8) menu_warp ;;
       9)
+        v=on
+        [ "$(bbr_cur)" = bbr ] && v=off
+        run cmd_bbr "$v"
+        ;;
+      u | U)
         echo
         (cmd_uninstall)
         [ -d "$STATE" ] || return 0
