@@ -146,6 +146,16 @@ check "非法域名被拒绝" bash -c "! bash dist/pbox.sh warp domains 'bad dom
 check "切到全部网站" bash -c "bash dist/pbox.sh warp all --yes && grep -q '\"final\": \"warp\"' '$(E)/generated/sing-box/00_base.json' && python3 -m json.tool '$(E)/generated/sing-box/00_base.json'"
 check "关闭后配置里不再有 WARP" bash -c "bash dist/pbox.sh warp off --yes && ! grep -q warp '$(E)/generated/sing-box/00_base.json'"
 
+echo "Argo 节点与优选地址"
+check "添加 Argo 节点" pbox add vless-ws --yes
+check "入站只监听本机" grep -q '"listen": "127.0.0.1"' "$(E)/generated/sing-box/10_vless-ws.json"
+check "链接用隧道域名作地址和 Host" grep -q '@example-test.trycloudflare.com:443?.*host=example-test.trycloudflare.com.*#.*Argo-CDN' "$(E)/nodes/links.txt"
+check "设置优选地址后，地址变而 Host 不变" bash -c "bash dist/pbox.sh change vless-ws cdn www.visa.com.sg --yes && grep -q '@www.visa.com.sg:443?.*sni=example-test.trycloudflare.com' '$(E)/nodes/links.txt'"
+check "客户端配置仍合法" bash -c "python3 -m json.tool '$(E)/nodes/sing-box.json' && grep -q 'Host: \"example-test.trycloudflare.com\"' '$(E)/nodes/mihomo.yaml'"
+check "关闭优选后回到隧道域名" bash -c "bash dist/pbox.sh change vless-ws cdn off --yes && grep -q '@example-test.trycloudflare.com:443' '$(E)/nodes/links.txt'"
+check "WARP 网站名单可恢复默认" bash -c "bash dist/pbox.sh warp on --yes && bash dist/pbox.sh warp domains a.example.com --yes && bash dist/pbox.sh warp domains default --yes && grep -q openai.com '$(E)/generated/sing-box/00_base.json' && bash dist/pbox.sh warp off --yes"
+check "删除 Argo 节点" pbox del vless-ws --yes
+
 echo "端口跳跃"
 check "开启端口跳跃" pbox change hysteria2 hop 30000-30999 --yes
 check "链接里带上跳跃范围" grep -q ':443/?.*&mport=30000-30999#' "$(E)/nodes/links.txt"

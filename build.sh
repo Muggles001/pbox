@@ -16,11 +16,13 @@ src/lib/reality.sh
 src/cores/core.sh
 src/protocols/reality-vision.sh
 src/protocols/hysteria2.sh
+src/protocols/vless-ws.sh
 src/lib/conflict.sh
 src/lib/render.sh
 src/lib/firewall.sh
 src/lib/hop.sh
 src/lib/warp.sh
+src/lib/argo.sh
 src/lib/nodes.sh
 src/lib/sub.sh
 src/lib/doctor.sh

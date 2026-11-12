@@ -60,7 +60,7 @@ choose() {
 }
 
 menu_proto() {
-  local id="$1" n=0 k_port k_sni k_ext k_off k_hop
+  local id="$1" n=0 k_port k_sni k_ext k_off k_hop k_cdn
   while :; do
     menu_header "$(pmeta "$id" title)"
     if ! proto_enabled "$id"; then
@@ -80,6 +80,11 @@ menu_proto() {
     item $n mp_port mp_port_d
     if [ "$id" = reality-vision ]; then n=$((n + 1)) k_sni=$n; item $n mp_sni mp_sni_d; fi
     if [ "$(gget nat 0)" = 1 ]; then n=$((n + 1)) k_ext=$n; item $n mp_ext mp_ext_d; fi
+    k_cdn=""
+    if [ "$id" = vless-ws ]; then
+      n=$((n + 1)) k_cdn=$n
+      printf "$T_m_fmt" "$n" "$(t mp_cdn)" "${C_D}[$(pget vless-ws cdn_addr "$(t off)")] $(t mp_cdn_d)${C_0}"
+    fi
     k_hop=""
     if [ "$id" = hysteria2 ] && [ "$(gget nat 0)" != 1 ]; then
       n=$((n + 1)) k_hop=$n
@@ -100,6 +105,8 @@ menu_proto() {
         if [ -n "$k_sni" ] && [ "$REPLY" = "$k_sni" ]; then
           ask " $(t mp_ask_sni)" ""
           run cmd_change "$id" sni "${REPLY:-auto}"
+        elif [ -n "$k_cdn" ] && [ "$REPLY" = "$k_cdn" ]; then
+          menu_cdn
         elif [ -n "$k_hop" ] && [ "$REPLY" = "$k_hop" ]; then
           ask " $(t mp_ask_hop)" "on"
           run cmd_change "$id" hop "$REPLY"
@@ -110,6 +117,37 @@ menu_proto() {
         ;;
     esac
   done
+}
+
+menu_cdn() {
+  local n c pick
+  menu_header "$(t mp_cdn)"
+  say " $(t cdn_intro)"
+  say ""
+  n=0
+  for c in $ARGO_CDN_CHOICES; do
+    n=$((n + 1))
+    printf '  %s  %s\n' "$n" "$c"
+  done
+  printf "$T_m_fmt" 8 "$(t cdn_custom)" "${C_D}$(t cdn_custom_d)${C_0}"
+  printf "$T_m_fmt" 9 "$(t cdn_off)" "${C_D}$(t cdn_off_d)${C_0}"
+  item 0 m_back m_blank
+  choose
+  case "$REPLY" in
+    0 | "" | q) return 0 ;;
+    8)
+      ask " $(t cdn_ask)" ""
+      [ -n "$REPLY" ] && run cmd_change vless-ws cdn "$REPLY"
+      return 0
+      ;;
+    9) run cmd_change vless-ws cdn off; return 0 ;;
+  esac
+  n=0 pick=""
+  for c in $ARGO_CDN_CHOICES; do
+    n=$((n + 1))
+    [ "$REPLY" = "$n" ] && pick="$c"
+  done
+  [ -n "$pick" ] && run cmd_change vless-ws cdn "$pick"
 }
 
 menu_protocols() {

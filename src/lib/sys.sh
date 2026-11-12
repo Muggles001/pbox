@@ -29,6 +29,15 @@ lock() {
   trap 'unlock; exit 130' INT TERM
 }
 
+lock_try() {
+  [ "$LOCKED" = 1 ] && return 0
+  mkdir -p "$(dirname "$LOCKDIR")" 2>/dev/null
+  mkdir "$LOCKDIR" 2>/dev/null || return 1
+  echo $$ >"$LOCKDIR/pid"
+  LOCKED=1
+  trap 'unlock' EXIT
+}
+
 unlock() {
   [ "$LOCKED" = 1 ] && rm -rf "$LOCKDIR"
   LOCKED=0
@@ -146,10 +155,10 @@ svc() {
   fi
 }
 
-# svc_write <服务名> <启动命令> [支持热重载 0|1]
+# svc_write <服务名> <启动命令> [支持热重载 0|1] [额外的一行服务设置]
 # 内核以专用账号运行，只保留绑定低位端口的能力；日志写文件，便于单独清空。
 svc_write() {
-  local n="$1" cmd="$2" rel="${3:-0}" f before
+  local n="$1" cmd="$2" rel="${3:-0}" extra="${4:-}" f before
   UNIT_CHANGED=0
   testing && return 0
   [ "$INIT" = systemd ] && f="/etc/systemd/system/$n.service" || f="/etc/init.d/$n"
@@ -175,6 +184,7 @@ WorkingDirectory=$VARDIR
 ExecStart=$cmd
 EOF
       [ "$rel" = 1 ] && echo 'ExecReload=/bin/kill -HUP $MAINPID'
+      [ -n "$extra" ] && echo "$extra"
       [ -f "$ETC/resolv.conf" ] && echo "BindReadOnlyPaths=$ETC/resolv.conf:/etc/resolv.conf"
       cat <<EOF
 Restart=on-failure

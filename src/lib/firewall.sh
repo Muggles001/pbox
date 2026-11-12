@@ -38,7 +38,10 @@ fw_close() {
 
 ports_wanted() {
   local id r
-  for id in $(protos_enabled); do echo "$(pget "$id" port)/$(pmeta "$id" l4)"; done
+  for id in $(protos_enabled); do
+    [ "$(pmeta "$id" local)" = 1 ] && continue
+    echo "$(pget "$id" port)/$(pmeta "$id" l4)"
+  done
   r=$(pget hysteria2 hop_range)
   [ -n "$r" ] && echo "${r%-*}:${r#*-}/udp"
   return 0

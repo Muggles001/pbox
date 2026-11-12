@@ -68,5 +68,6 @@ cmd_restore() {
   hop_apply
   fw_sync
   nodes_write
+  argo_apply
   nodes_show
 }

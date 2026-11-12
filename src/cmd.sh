@@ -56,6 +56,7 @@ nat_setup() {
   gset nat 1
   [ "$ASSUME_YES" = 1 ] || { head1 "$(t nat_title)"; say "$(t nat_explain)"; }
   for id in $(protos_enabled); do
+    [ "$(pmeta "$id" local)" = 1 ] && continue
     case "$id" in reality-vision) k=REALITY_EXT_PORT ;; hysteria2) k=HY2_EXT_PORT ;; *) k="" ;; esac
     e=$(opt "$k")
     if [ -z "$e" ] && [ "$ASSUME_YES" != 1 ]; then
@@ -156,6 +157,7 @@ cmd_install() {
   self_install
   fw_sync
   nodes_write
+  argo_apply || warn "$(t argo_fail)"
   say ""
   say "${C_G}$(t install_done)${C_0}"
   nodes_show
@@ -207,6 +209,7 @@ edit_end() {
   hop_apply || warn "$(t hop_fail)"
   fw_sync
   nodes_write
+  argo_apply || warn "$(t argo_fail)"
   sub_push || warn "$(t sub_push_fail)"
   say "${C_G}$(t applied)${C_0}"
   note "$(t links_changed)"
@@ -252,6 +255,15 @@ cmd_change() {
       [ "$val" = auto ] && val=$(random_port "$l4")
       valid_port "$val" || { txn_abort; die "$(t bad_port "$val")"; }
       pset "$id" port "$val"
+      ;;
+    cdn)
+      # 优选地址：客户端改连这个地址，再由 Cloudflare 送回自己的隧道
+      [ "$id" = vless-ws ] || { txn_abort; die "$(t change_usage)"; }
+      case "$val" in
+        off | auto | none) val="" ;;
+        *) valid_domain "$val" || printf '%s' "$val" | grep -Eq '^[0-9a-fA-F:.]+$' || { txn_abort; die "$(t bad_domain "$val")"; } ;;
+      esac
+      pset vless-ws cdn_addr "$val"
       ;;
     hop)
       [ "$id" = hysteria2 ] || { txn_abort; die "$(t change_usage)"; }
@@ -375,6 +387,7 @@ cmd_rollback() {
   hop_apply
   fw_sync
   nodes_write
+  argo_apply
   say "$(t rolled_back)"
 }
 
@@ -424,6 +437,7 @@ pbox $PBOX_VERSION
   pbox change <proto> port <n|auto>
   pbox change <proto> ext-port <n>
   pbox change hysteria2 hop <on|off|A-B>
+  pbox change vless-ws cdn <addr|off>
   pbox change reality-vision sni <domain|auto>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]

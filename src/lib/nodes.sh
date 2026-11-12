@@ -18,7 +18,7 @@ node_each() {
   [ "$(users_list | wc -l)" -gt 1 ] && multi=1
   for id in $(protos_enabled); do
     for u in $(users_list); do
-      node_hosts | while IFS= read -r line; do
+      if declare -F "proto_${id//-/_}_hosts" >/dev/null; then pcall "$id" hosts; else node_hosts; fi | while IFS= read -r line; do
         label="${line%%|*}" host="${line#*|}"
         name="$(pmeta "$id" short)-$label"
         [ -n "$region" ] && name="$region-$name"

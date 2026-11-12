@@ -72,6 +72,7 @@ core_fetch() {
 cores_ensure() {
   local core todo="" tmp pids="" p fail=0 b
   testing && return 0
+  if proto_enabled vless-ws; then argo_ensure || return 1; fi
   for core in $(cores_needed); do
     [ "$(kv_get "$LIBDIR/installed.env" "$core")" = "$(core_pinned "$core")" ] && [ -x "$(core_bin "$core")" ] && continue
     todo="$todo $core"

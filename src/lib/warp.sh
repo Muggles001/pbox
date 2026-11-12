@@ -140,7 +140,9 @@ cmd_warp() {
       ;;
     domains)
       warp_on || { txn_abort; die "$(t warp_need_on)"; }
-      if [ -n "$val" ]; then
+      if [ "$val" = default ]; then
+        oset warp_domains ""
+      elif [ -n "$val" ]; then
         val=$(printf '%s' "$val" | tr -d ' ' | tr 'A-Z' 'a-z')
         for d in $(printf '%s' "$val" | tr ',' ' '); do
           valid_domain "$d" || { txn_abort; die "$(t bad_domain "$d")"; }

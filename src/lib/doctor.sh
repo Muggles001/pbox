@@ -148,6 +148,7 @@ d_external() {
   ip=$(gget ip4)
   [ -z "$ip" ] && ip=$(gget ip6)
   for id in $(protos_enabled); do
+    [ "$(pmeta "$id" local)" = 1 ] && continue
     [ "$(pmeta "$id" l4)" = tcp ] && tcp="$tcp $(pubport "$id")"
   done
   note "$(t d_ext_title)"
