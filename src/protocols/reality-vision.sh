@@ -75,9 +75,9 @@ EOF
 # share_link <用户> <主机> <节点名>
 # 浏览器指纹固定用 chrome：它的作用是混进最大的人群，不该随机。
 proto_reality_vision_share_link() {
-  printf 'vless://%s@%s:%s?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#%s\n' \
+  printf 'vless://%s@%s:%s?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=%s&pbk=%s&sid=%s&type=tcp#%s\n' \
     "$(uget "$1" uuid)" "$(host_fmt "$2")" "$(pubport reality-vision)" "$(pget reality-vision sni)" \
-    "$(pget reality-vision public_key)" "$(pget reality-vision short_id)" "$3"
+    "$(fp_of reality-vision)" "$(pget reality-vision public_key)" "$(pget reality-vision short_id)" "$3"
 }
 
 proto_reality_vision_client_singbox() {
@@ -92,7 +92,7 @@ proto_reality_vision_client_singbox() {
       "tls": {
         "enabled": true,
         "server_name": "$(pget reality-vision sni)",
-        "utls": {"enabled": true, "fingerprint": "chrome"},
+        "utls": {"enabled": true, "fingerprint": "$(fp_of reality-vision)"},
         "reality": {"enabled": true, "public_key": "$(pget reality-vision public_key)", "short_id": "$(pget reality-vision short_id)"}
       }
     }
@@ -111,7 +111,7 @@ proto_reality_vision_client_mihomo() {
     tls: true
     flow: xtls-rprx-vision
     servername: "$(pget reality-vision sni)"
-    client-fingerprint: chrome
+    client-fingerprint: $(fp_of reality-vision)
     reality-opts:
       public-key: "$(pget reality-vision public_key)"
       short-id: "$(pget reality-vision short_id)"
@@ -127,7 +127,7 @@ proto_reality_vision_selftest() {
  "outbounds": [{"type": "vless", "server": "127.0.0.1", "server_port": $(pget reality-vision port),
   "uuid": "$(uget "$u" uuid)", "flow": "xtls-rprx-vision",
   "tls": {"enabled": true, "server_name": "$(pget reality-vision sni)",
-   "utls": {"enabled": true, "fingerprint": "chrome"},
+   "utls": {"enabled": true, "fingerprint": "$(fp_of reality-vision)"},
    "reality": {"enabled": true, "public_key": "$(pget reality-vision public_key)", "short_id": "$(pget reality-vision short_id)"}}}]}
 EOF
   selftest singbox "$d/c.json" "$p"

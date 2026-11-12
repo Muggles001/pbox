@@ -62,7 +62,7 @@ choose() {
 }
 
 menu_proto() {
-  local id="$1" n=0 k_port k_sni k_ext k_off k_hop k_cdn k_fix k_tmp k_obfs k_path k_cc
+  local id="$1" n=0 k_port k_sni k_ext k_off k_hop k_cdn k_fix k_tmp k_obfs k_path k_cc k_fp k_keys k_eport
   while :; do
     menu_header "$(pmeta "$id" title)"
     if ! proto_enabled "$id"; then
@@ -108,6 +108,19 @@ menu_proto() {
       n=$((n + 1)) k_tmp=$n
       printf "$T_m_fmt" "$n" "$(t mp_temp)" "${C_D}[$(onoff "$([ "$(pget vless-ws temp on)" = on ] && echo 1 || echo 0)")] $(t mp_temp_d)${C_0}"
     fi
+    k_fp="" k_keys="" k_eport=""
+    if [ "$id" = vless-ws ]; then
+      n=$((n + 1)) k_eport=$n
+      printf "$T_m_fmt" "$n" "$(t mp_eport)" "${C_D}[$(vless_ws_eport)] $(t mp_eport_d)${C_0}"
+    fi
+    if [ "$id" = reality-vision ] || [ "$id" = vless-ws ]; then
+      n=$((n + 1)) k_fp=$n
+      printf "$T_m_fmt" "$n" "$(t mp_fp)" "${C_D}[$(fp_of "$id")] $(t mp_fp_d)${C_0}"
+    fi
+    if [ "$id" = reality-vision ]; then
+      n=$((n + 1)) k_keys=$n
+      item $n mp_keys mp_keys_d
+    fi
     k_hop=""
     if [ "$id" = hysteria2 ] && [ "$(gget nat 0)" != 1 ]; then
       n=$((n + 1)) k_hop=$n
@@ -144,6 +157,14 @@ menu_proto() {
           fi
         elif [ -n "$k_tmp" ] && [ "$REPLY" = "$k_tmp" ]; then
           if [ "$(pget vless-ws temp on)" = on ]; then run cmd_argo temp off; else run cmd_argo temp on; fi
+        elif [ -n "$k_fp" ] && [ "$REPLY" = "$k_fp" ]; then
+          ask " $(t mp_ask_fp "$FP_CHOICES")" "chrome"
+          run cmd_change "$id" fp "$REPLY"
+        elif [ -n "$k_eport" ] && [ "$REPLY" = "$k_eport" ]; then
+          ask " $(t mp_ask_eport "$VLESS_WS_EDGE_PORTS")" "443"
+          run cmd_change vless-ws edge-port "$REPLY"
+        elif [ -n "$k_keys" ] && [ "$REPLY" = "$k_keys" ]; then
+          confirm " $(t mp_keys_q)" n && run cmd_change reality-vision keys
         elif [ -n "$k_cdn" ] && [ "$REPLY" = "$k_cdn" ]; then
           menu_cdn
         elif [ -n "$k_hop" ] && [ "$REPLY" = "$k_hop" ]; then
@@ -217,6 +238,11 @@ menu_protocols() {
 menu_addr_mode() {
   local mode dom
   menu_header "$(t mset_addr)"
+  if [ -n "$(gget ip4)" ] && [ -n "$(gget ip6)" ]; then
+    printf '  %s%s%s\n\n' "$C_D" "$(t ma_dual)" "$C_0"
+  else
+    printf '  %s%s%s\n\n' "$C_D" "$(t ma_single "$([ -n "$(gget ip4)" ] && echo IPv4 || echo IPv6)")" "$C_0"
+  fi
   item 1 ma_split ma_split_d
   item 2 ma_all ma_all_d
   item 3 ma_merged ma_merged_d
@@ -225,8 +251,13 @@ menu_addr_mode() {
   case "$REPLY" in 1) mode="split" ;; 2) mode="all" ;; 3) mode="merged" ;; *) return 0 ;; esac
   dom=""
   if [ "$mode" != split ]; then
-    ask " $(t mset_ask_domain)" "$(gget domain)"
-    dom="$REPLY"
+    # 已经有证书域名时直接用它，不再问一遍
+    if tls_real && ! tls_is_ip; then
+      dom=$(gget tls_domain)
+    else
+      ask " $(t mset_ask_domain)" "$(gget domain)"
+      dom="$REPLY"
+    fi
   fi
   run cmd_set addr-mode "$mode" "$dom"
 }
@@ -236,9 +267,10 @@ menu_domain() {
     menu_header "$(t mset_domain)"
     printf '  %s%s%s\n\n' "$C_D" "$(domain_status)" "$C_0"
     item 1 md_set md_set_d
-    item 2 md_ip md_ip_d
-    item 3 md_renew md_renew_d
-    item 4 md_off md_off_d
+    item 2 md_dns md_dns_d
+    item 3 md_ip md_ip_d
+    item 4 md_renew md_renew_d
+    item 5 md_off md_off_d
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -246,9 +278,13 @@ menu_domain() {
         ask " $(t dom_ask)" ""
         [ -n "$REPLY" ] && run cmd_domain set "$REPLY"
         ;;
-      2) run cmd_domain set ip ;;
-      3) run cmd_domain renew ;;
-      4) run cmd_domain off ;;
+      2)
+        ask " $(t dom_ask)" ""
+        [ -n "$REPLY" ] && run cmd_domain set "$REPLY" dns
+        ;;
+      3) run cmd_domain set ip ;;
+      4) run cmd_domain renew ;;
+      5) run cmd_domain off ;;
       *) return 0 ;;
     esac
   done

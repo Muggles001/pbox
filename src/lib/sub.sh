@@ -367,6 +367,9 @@ sub_join() { # <加入码>
 }
 
 read_secret() { # <提示>，结果在 REPLY；不回显
+  REPLY=""
+  # 不提问模式下没有人来输入，直接留空，由调用方报"缺少"
+  [ "$ASSUME_YES" = 1 ] && return 0
   printf '%s: ' "$1"
   IFS= read -rs REPLY || REPLY=""
   echo

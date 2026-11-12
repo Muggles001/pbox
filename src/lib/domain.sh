@@ -6,7 +6,10 @@
 #
 # 证书由 acme.sh 向 Let's Encrypt 申请。acme.sh 只取它的主程序一个文件，版本与哈希锁定，
 # 不走它自己的安装流程：不改 shell 配置、不装它的定时任务，续期由本脚本自己的定时器触发。
-# 验证方式是 HTTP-01：签发方会来访问本机的 80 端口，所以申请和续期时 80 端口都必须可达且空闲。
+# 默认的验证方式是 HTTP-01：签发方会来访问本机的 80 端口，所以申请和续期时 80 端口都必须可达且空闲。
+# 域名托管在 Cloudflare 时还可以用 DNS-01（pbox domain set 域名 dns）：由脚本通过 Cloudflare 的接口
+# 临时加一条解析记录来证明域名归属，不需要 80 端口，只转发指定端口的 NAT 机器也能用。
+# 它需要一个 Cloudflare 接口令牌；令牌由 acme.sh 保存在只有 root 可读的配置里，续期时还要用。
 
 ACME_HOME="$LIBDIR/acme"
 ACME_CONF="$ETC/acme"
@@ -45,6 +48,24 @@ acme_ensure() {
   install -m 0755 "$tmp/acme.sh" "$ACME_HOME/acme.sh"
   rm -rf "$tmp"
   chmod 700 "$ACME_CONF"
+}
+
+acme_ensure_dns() {
+  local f="$ACME_HOME/dnsapi/dns_cf.sh" tmp
+  [ -f "$f" ] && [ "$(sha256_of "$f")" = "$ACME_DNS_CF_SHA256" ] && return 0
+  tmp=$(mktemp -d)
+  dl_verify "https://raw.githubusercontent.com/acmesh-official/acme.sh/$ACME_VERSION/dnsapi/dns_cf.sh" "$ACME_DNS_CF_SHA256" "$tmp/dns_cf.sh" || { rm -rf "$tmp"; return 1; }
+  mkdir -p "$ACME_HOME/dnsapi"
+  install -m 0644 "$tmp/dns_cf.sh" "$f"
+  rm -rf "$tmp"
+}
+
+# 清掉 acme.sh 保存的 Cloudflare 令牌
+acme_forget_token() {
+  [ -f "$ACME_CONF/account.conf" ] || return 0
+  grep -v -E 'CF_(Token|Account_ID|Zone_ID)' "$ACME_CONF/account.conf" >"$ACME_CONF/account.conf.tmp"
+  mv "$ACME_CONF/account.conf.tmp" "$ACME_CONF/account.conf"
+  chmod 600 "$ACME_CONF/account.conf"
 }
 
 # 把签下来的证书放到内核读取的位置
@@ -112,8 +133,13 @@ EOF
 }
 
 # 申请前的检查：问题在这里指出，而不是等签发方报一个看不懂的错
-domain_precheck() { # <域名>
+domain_precheck() { # <域名> [dns]
   local dom="$1" ip4 ip6 got owner
+  if [ "${2:-}" = dns ]; then
+    is_ip4 "$dom" && die "$(t dom_dns_ip)"
+    valid_domain "$dom" || die "$(t bad_domain "$dom")"
+    return 0
+  fi
   [ "$(gget nat 0)" = 1 ] && die "$(t dom_nat)"
   if is_ip4 "$dom"; then
     if ! testing && port_in_use tcp 80; then
@@ -136,8 +162,8 @@ domain_precheck() { # <域名>
   return 0
 }
 
-domain_set() { # <域名>
-  local dom="${1:-}" be log old prof=""
+domain_set() { # <域名|ip> [dns]
+  local dom="${1:-}" method="${2:-http}" be log old prof="" tok="" rc
   need_root
   need_installed
   detect_sys
@@ -151,17 +177,43 @@ domain_set() { # <域名>
     # 只为 IPv4 申请：IPv6 的情况没有验证过
     [ -n "$dom" ] || die "$(t dom_ip_no4)"
   fi
-  domain_precheck "$dom"
+  [ "$method" = dns ] || method=http
+  domain_precheck "$dom" "$method"
   head1 "$(t dom_plan_title)"
   if is_ip4 "$dom"; then
     prof="--certificate-profile shortlived"
     say "$(t dom_plan_ip "$dom")"
+  elif [ "$method" = dns ]; then
+    say "$(t dom_plan_dns "$dom")"
   else
     say "$(t dom_plan "$dom")"
   fi
   say ""
   confirm "$(t dom_plan_q)" || die "$(t cancelled)"
-  if ! testing; then
+  if [ "$method" = dns ]; then
+    tok="${PBOX_CF_TOKEN:-}"
+    if [ -z "$tok" ]; then
+      say ""
+      say "$(t dom_token_help)"
+      read_secret "$(t dom_ask_token)"
+      tok="$REPLY"
+    fi
+    [ -n "$tok" ] || die "$(t dom_need_token)"
+  fi
+  if ! testing && [ "$method" = dns ]; then
+    # 先确认令牌本身有效，免得等到申请失败才发现
+    fetch --max-time 15 -H "Authorization: Bearer $tok" https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null |
+      grep -q '"success": *true' || die "$(t dom_token_bad)"
+    acme_ensure || die "$(t dl_abort)"
+    acme_ensure_dns || die "$(t dl_abort)"
+    say "$(t dom_issuing_dns)"
+    log="$LOGDIR/acme.log"
+    mkdir -p "$LOGDIR"
+    CF_Token="$tok" acme --issue --dns dns_cf -d "$dom" --server "$(acme_server)" --keylength ec-256 --log "$log" >/dev/null 2>&1
+    rc=$?
+    chmod 600 "$ACME_CONF/account.conf" 2>/dev/null
+    if [ $rc != 0 ] && [ ! -f "$ACME_CONF/${dom}_ecc/fullchain.cer" ]; then die "$(t dom_issue_fail_dns "$log")"; fi
+  elif ! testing; then
     if ! has socat; then
       say "$(t deps_missing " socat")"
       pkg_install socat >/dev/null || die "$(t deps_fail " socat")"
@@ -182,8 +234,10 @@ domain_set() { # <域名>
   old=$(gget tls_domain)
   edit_begin
   gset tls_domain "$dom"
+  gset tls_method "$method"
   edit_end
   domain_timer on
+  [ "$method" = dns ] || testing || acme_forget_token
   # 换了域名（或在域名与 IP 之间切换）时，旧的那份不再续期
   if [ -n "$old" ] && [ "$old" != "$dom" ] && ! testing; then
     acme --remove -d "$old" --ecc >/dev/null 2>&1
@@ -207,6 +261,7 @@ domain_off() {
   if ! testing; then
     acme --remove -d "$dom" --ecc >/dev/null 2>&1
     rm -rf "$ACME_CONF/${dom}_ecc"
+    acme_forget_token
     be=$(fw_backend)
     [ -n "$be" ] && grep -qxF "fw	$be 80/tcp" "$MANIFEST" 2>/dev/null && fw_close "$be" 80/tcp
   fi
@@ -219,7 +274,10 @@ domain_renew() {
   local dom core rc
   need_root
   dom=$(kv_get "$STATE/global.env" tls_domain)
-  [ -n "$dom" ] || return 0
+  if [ -z "$dom" ]; then
+    say "$(t dom_not_set)"
+    return 0
+  fi
   detect_sys
   lock_try || return 0
   acme --renew -d "$dom" --ecc --server "$(acme_server)" --log "$LOGDIR/acme.log" >/dev/null 2>&1
@@ -229,7 +287,12 @@ domain_renew() {
     for core in $(cores_needed); do svc restart "$(core_svc "$core")"; done
   fi
   unlock
-  [ $rc = 0 ] || [ $rc = 2 ]
+  case $rc in
+    0) say "$(t dom_renewed)" ;;
+    2) say "$(t dom_renew_skip)" ;;
+    *) warn "$(t dom_renew_fail "$LOGDIR/acme.log")"; return 1 ;;
+  esac
+  domain_status
 }
 
 cert_end_date() { openssl x509 -in "$1" -noout -enddate 2>/dev/null | sed 's/^notAfter=//'; }
@@ -258,6 +321,8 @@ d_domain() {
     return 1
   fi
   tls_is_ip && return 0
+  # 用接口验证的证书，续期不依赖域名指向哪里
+  [ "$(gget tls_method)" = dns ] && return 0
   ip4=$(gget ip4) ip6=$(gget ip6)
   if { [ -n "$ip4" ] && resolve A "$dom" | grep -qxF "$ip4"; } || { [ -n "$ip6" ] && resolve AAAA "$dom" | grep -qxF "$ip6"; }; then
     ok "$(t d_dom_dns_ok "$dom")"
@@ -267,10 +332,10 @@ d_domain() {
   fi
 }
 
-# pbox domain [status|set 域名|set ip|off|renew]
+# pbox domain [status|set 域名 [dns]|set ip|off|renew]
 cmd_domain() {
   case "${1:-status}" in
-    set) domain_set "${2:-}" ;;
+    set) domain_set "${2:-}" "${3:-}" ;;
     off) domain_off ;;
     renew) domain_renew ;;
     status) need_root; need_installed; domain_status ;;

@@ -315,7 +315,29 @@ check "没有域名时改用本机 IP" bash -c "bash dist/pbox.sh domain set ip 
 check "IP 证书的链接按 IP 验证，不跳过验证" bash -c "grep -q '^tuic://.*sni=203.0.113.10' '$(E)/nodes/links.txt' && ! grep -Eq 'pinSHA256|insecure' '$(E)/nodes/links.txt' && python3 -m json.tool '$(E)/nodes/sing-box.json'"
 check "从 IP 换成域名" bash -c "PBOX_TEST_DNS_A=203.0.113.10 bash dist/pbox.sh domain set b.example.com --yes && grep -qx 'tls_domain=b.example.com' '$(E)/state/global.env'"
 pbox domain off --yes >/dev/null 2>&1
+check "已有证书域名时，地址模式直接用它而不必再填" bash -c "PBOX_TEST_DNS_A=203.0.113.10 PBOX_TEST_DNS_AAAA=2001:db8::10 bash dist/pbox.sh domain set c.example.com --yes && PBOX_TEST_DNS_A=203.0.113.10 PBOX_TEST_DNS_AAAA=2001:db8::10 bash dist/pbox.sh set addr-mode all --yes && grep -qx 'domain=c.example.com' '$(E)/state/global.env'"
+pbox set addr-mode split --yes >/dev/null 2>&1
+pbox domain off --yes >/dev/null 2>&1
+check "没有域名时给出明确提示" bash -c "sed -i.bak '/^domain=/d' '$(E)/state/global.env'; ! bash dist/pbox.sh set addr-mode all --yes"
+check "接口验证缺少令牌时拒绝" bash -c "! bash dist/pbox.sh domain set d.example.com dns --yes"
+check "接口验证不要求域名指向本机" bash -c "PBOX_CF_TOKEN=x bash dist/pbox.sh domain set d.example.com dns --yes && grep -qx 'tls_method=dns' '$(E)/state/global.env'"
+check "接口验证不能用于 IP" bash -c "! PBOX_CF_TOKEN=x bash dist/pbox.sh domain set 203.0.113.10 dns --yes"
+pbox domain off --yes >/dev/null 2>&1
 check "NAT 机器上说明不能用" bash -c "sed -i.bak 's/^nat=.*/nat=1/' '$(E)/state/global.env'; grep -q '^nat=1' '$(E)/state/global.env' || echo nat=1 >>'$(E)/state/global.env'; ! PBOX_TEST_DNS_A=203.0.113.10 bash dist/pbox.sh domain set a.example.com --yes"
+
+check "NAT 机器可以用接口验证" bash -c "PBOX_CF_TOKEN=x bash dist/pbox.sh domain set d.example.com dns --yes && grep -q 'sni=d.example.com' '$(E)/nodes/links.txt'"
+
+echo "VLESS 的自定义选项"
+new_root
+PBOX_PROTOCOLS="reality-vision vless-ws" pbox install --yes >/dev/null 2>&1
+check "Reality 换握手特征" bash -c "bash dist/pbox.sh change reality-vision fp firefox --yes && grep -q '^vless://.*security=reality.*fp=firefox' '$(E)/nodes/links.txt' && grep -q 'client-fingerprint: firefox' '$(E)/nodes/mihomo.yaml' && python3 -m json.tool '$(E)/nodes/sing-box.json'"
+check "不认识的握手特征被拒绝" bash -c "! bash dist/pbox.sh change reality-vision fp netscape --yes"
+old_pbk=$(sed -n 's/^public_key=//p' "$(E)/state/protocols/reality-vision.env")
+u_before=$(sed -n 's/^uuid=//p' "$(E)/state/users/default.env")
+check "只换 Reality 的密钥，不动用户凭据" bash -c "bash dist/pbox.sh change reality-vision keys --yes && ! grep -qx 'public_key=$old_pbk' '$(E)/state/protocols/reality-vision.env' && grep -qx 'uuid=$u_before' '$(E)/state/users/default.env'"
+check "Argo 节点换连接端口" bash -c "bash dist/pbox.sh change vless-ws edge-port 2053 --yes && grep -q '^vless://.*:2053?.*type=ws' '$(E)/nodes/links.txt' && grep -q '\"server_port\": 2053' '$(E)/nodes/sing-box.json'"
+check "Cloudflare 不支持的端口被拒绝" bash -c "! bash dist/pbox.sh change vless-ws edge-port 8080 --yes"
+check "握手特征对不相关的协议不可用" bash -c "! bash dist/pbox.sh change hysteria2 fp firefox --yes"
 
 echo "BBR"
 new_root

@@ -16,7 +16,7 @@ ver_newer() { # <线上标签，如 v1.2.3> <本机版本>
   return 1
 }
 
-# 打开菜单时调用：每天最多联网一次，两秒超时，只提示不更新。可用 pbox set update-check off 关闭。
+# 打开菜单时调用：每 6 小时最多联网一次，两秒超时，只提示不更新。可用 pbox set update-check off 关闭。
 update_notice() {
   local cache="$LIBDIR/update.cache" now last tag
   [ -n "$PBOX_REPO" ] || return 0
@@ -24,7 +24,7 @@ update_notice() {
   [ "$(kv_get "$STATE/global.env" update_check 1)" = 1 ] || return 0
   now=$(date +%s)
   last=$(kv_get "$cache" time 0)
-  if [ $((now - last)) -ge 86400 ]; then
+  if [ $((now - last)) -ge 21600 ]; then
     tag=$(update_latest_tag 2)
     kv_set "$cache" time "$now" 2>/dev/null
     [ -n "$tag" ] && kv_set "$cache" tag "$tag" 2>/dev/null
@@ -42,6 +42,9 @@ cmd_update() {
   [ -n "$PBOX_REPO" ] || die "$(t upd_norepo)"
   tag=$(update_latest_tag) || tag=""
   [ -n "$tag" ] || die "$(t upd_fail)"
+  # 手动检查的结果也记下来，菜单里的提示随之更新
+  kv_set "$LIBDIR/update.cache" time "$(date +%s)" 2>/dev/null
+  kv_set "$LIBDIR/update.cache" tag "$tag" 2>/dev/null
   if ! ver_newer "$tag" "$PBOX_VERSION"; then
     say "$(t upd_latest "$PBOX_VERSION")"
   else

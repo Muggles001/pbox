@@ -56,6 +56,10 @@ proto_users() { # <协议> → 能用它的用户
   return 0
 }
 
+# 客户端模仿哪种浏览器的握手特征。只影响给客户端的输出，服务端不关心。
+FP_CHOICES="chrome firefox safari ios android edge random"
+fp_of() { pget "$1" fp chrome; }
+
 # 写进节点信息的端口。NAT 机器上监听的是内网端口，客户端要连的是商家转发出来的外网端口。
 pubport() {
   local e

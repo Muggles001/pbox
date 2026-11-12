@@ -63,14 +63,18 @@ proto_vless_ws_hosts() {
 }
 
 # 当前这个节点对应的隧道域名。TLS 的域名和 Host 头都用它，Cloudflare 靠它把请求送到正确的隧道。
+# 客户端连 Cloudflare 的哪个端口。Cloudflare 的 HTTPS 入口不止 443，某个端口被限速时可以换。
+VLESS_WS_EDGE_PORTS="443 2053 2083 2087 2096 8443"
+vless_ws_eport() { pget vless-ws edge_port 443; }
+
 vless_ws_tunnel() { printf '%s' "${NODE_EXTRA:-$(pget vless-ws argo_host)}"; }
 
 proto_vless_ws_share_link() {
   local h p
   h=$(vless_ws_tunnel)
   p=$(pget vless-ws path | sed 's#/#%2F#g')
-  printf 'vless://%s@%s:443?encryption=none&security=tls&sni=%s&fp=chrome&type=ws&host=%s&path=%s#%s\n' \
-    "$(uget "$1" uuid)" "$(host_fmt "$2")" "$h" "$h" "$p" "$3"
+  printf 'vless://%s@%s:%s?encryption=none&security=tls&sni=%s&fp=%s&type=ws&host=%s&path=%s#%s\n' \
+    "$(uget "$1" uuid)" "$(host_fmt "$2")" "$(vless_ws_eport)" "$h" "$(fp_of vless-ws)" "$h" "$p" "$3"
 }
 
 proto_vless_ws_client_singbox() {
@@ -81,9 +85,9 @@ proto_vless_ws_client_singbox() {
       "type": "vless",
       "tag": "$3",
       "server": "$2",
-      "server_port": 443,
+      "server_port": $(vless_ws_eport),
       "uuid": "$(uget "$1" uuid)",
-      "tls": {"enabled": true, "server_name": "$h", "utls": {"enabled": true, "fingerprint": "chrome"}},
+      "tls": {"enabled": true, "server_name": "$h", "utls": {"enabled": true, "fingerprint": "$(fp_of vless-ws)"}},
       "transport": {"type": "ws", "path": "$(pget vless-ws path)", "headers": {"Host": "$h"}}
     }
 EOF
@@ -96,13 +100,13 @@ proto_vless_ws_client_mihomo() {
   - name: "$3"
     type: vless
     server: "$2"
-    port: 443
+    port: $(vless_ws_eport)
     uuid: "$(uget "$1" uuid)"
     network: ws
     udp: true
     tls: true
     servername: "$h"
-    client-fingerprint: chrome
+    client-fingerprint: $(fp_of vless-ws)
     ws-opts:
       path: "$(pget vless-ws path)"
       headers:
@@ -118,7 +122,7 @@ vless_ws_selftest() {
   cat >"$d/c.json" <<EOF
 {"log": {"disabled": true},
  "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
- "outbounds": [{"type": "vless", "server": "$1", "server_port": 443, "uuid": "$(uget "$u" uuid)",
+ "outbounds": [{"type": "vless", "server": "$1", "server_port": $(vless_ws_eport), "uuid": "$(uget "$u" uuid)",
   "tls": {"enabled": true, "server_name": "$2"},
   "transport": {"type": "ws", "path": "$(pget vless-ws path)", "headers": {"Host": "$2"}}}]}
 EOF

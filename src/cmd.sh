@@ -294,6 +294,22 @@ cmd_change() {
       esac
       pset vless-ws path "$val"
       ;;
+    fp)
+      case "$id" in reality-vision | vless-ws) ;; *) txn_abort; die "$(t change_usage)" ;; esac
+      case " $FP_CHOICES " in *" $val "*) pset "$id" fp "$val" ;; *) txn_abort; die "$(t bad_fp "$FP_CHOICES")" ;; esac
+      ;;
+    edge-port)
+      [ "$id" = vless-ws ] || { txn_abort; die "$(t change_usage)"; }
+      case " $VLESS_WS_EDGE_PORTS " in *" $val "*) pset vless-ws edge_port "$val" ;; *) txn_abort; die "$(t bad_edge_port "$VLESS_WS_EDGE_PORTS")" ;; esac
+      ;;
+    keys)
+      # 只换这一个协议的密钥对和短标识，不动用户凭据和其他协议
+      [ "$id" = reality-vision ] || { txn_abort; die "$(t change_usage)"; }
+      val=$(gen_reality_keypair) || { txn_abort; die "$(t keygen_fail)"; }
+      pset reality-vision private_key "$(printf '%s\n' "$val" | sed -n 1p)"
+      pset reality-vision public_key "$(printf '%s\n' "$val" | sed -n 2p)"
+      pset reality-vision short_id "$(rand_hex "$(rand_int 2 8)")"
+      ;;
     hop)
       [ "$id" = hysteria2 ] || { txn_abort; die "$(t change_usage)"; }
       hop_set "$val"
@@ -354,6 +370,8 @@ cmd_set() {
         merged | all)
           [ -n "$(gget ip4)" ] && [ -n "$(gget ip6)" ] || { txn_abort; die "$(t addr_single)"; }
           [ -n "$dom" ] || dom=$(gget domain)
+          if [ -z "$dom" ] && tls_real && ! tls_is_ip; then dom=$(gget tls_domain); fi
+          [ -n "$dom" ] || { txn_abort; die "$(t addr_need_domain)"; }
           addr_mode_check "$dom"
           gset domain "$dom"
           # S6：走哪条路由客户端决定，本地 IPv6 有问题时会受影响
@@ -473,6 +491,9 @@ pbox $PBOX_VERSION
   pbox change vless-ws cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
   pbox change reality-vision sni <domain|auto>
+  pbox change reality-vision keys
+  pbox change <reality-vision|vless-ws> fp <chrome|firefox|safari|ios|android|edge|random>
+  pbox change vless-ws edge-port <443|2053|2083|2087|2096|8443>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]
   pbox set region <XX|auto|off>
@@ -482,7 +503,7 @@ pbox $PBOX_VERSION
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]
   pbox warp [on|off|all|domains a.com,b.com|status|test]
   pbox bbr [on|off|status]
-  pbox domain [status|set DOMAIN|set ip|off|renew]
+  pbox domain [status|set DOMAIN [dns]|set ip|off|renew]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE
   pbox update   pbox uninstall   pbox lang
