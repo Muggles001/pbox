@@ -144,7 +144,7 @@ proto_vless_ws_doctor() {
     bad "$(t d_argo_dead)"
     rc=1
   fi
-  if [ -n "$(pget vless-ws fixed_host)" ] && ! svc active pbox-argo-fixed; then
+  if [ -f "$STATE/argo-fixed.env" ] && ! svc active pbox-argo-fixed; then
     bad "$(t d_argo_fixed_dead)"
     rc=1
   fi

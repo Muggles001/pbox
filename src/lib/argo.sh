@@ -70,9 +70,10 @@ argo_apply() {
   fi
   port=$(kv_get "$f" port)
   mp=$(kv_get "$f" metrics_port)
-  if [ -n "$(kv_get "$f" fixed_host)" ] && [ -f "$STATE/argo-fixed.env" ]; then
-    # 令牌放在只有 root 可读的文件里交给服务，不出现在命令行和服务文件中
-    svc_write pbox-argo-fixed "$(argo_bin) tunnel --no-autoupdate --protocol http2 run" 0 "EnvironmentFile=$STATE/argo-fixed.env"
+  if [ -f "$STATE/argo-fixed.env" ]; then
+    # 有令牌就运行，不必等域名填好：Cloudflare 后台要求连接器先连上，才能继续设置域名。
+    # 令牌放在只有 root 可读的文件里交给服务，不出现在命令行和服务文件中。
+    svc_write pbox-argo-fixed "$(argo_bin) tunnel --no-autoupdate --protocol http2 --metrics 127.0.0.1:$(kv_get "$f" fixed_metrics) run" 0 "EnvironmentFile=$STATE/argo-fixed.env"
     svc enable pbox-argo-fixed
     if ! svc active pbox-argo-fixed; then svc start pbox-argo-fixed; elif [ "${UNIT_CHANGED:-0}" = 1 ]; then svc restart pbox-argo-fixed; fi
   else
@@ -89,6 +90,19 @@ argo_apply() {
   else
     argo_svc_exists pbox-argo && svc_remove pbox-argo
   fi
+}
+
+# 固定隧道的连接器是否已经连上 Cloudflare。最多等 30 秒。
+argo_fixed_ready() {
+  local mp i=0
+  testing && return 0
+  mp=$(kv_get "$STATE/protocols/vless-ws.env" fixed_metrics)
+  while [ $i -lt 15 ]; do
+    curl -fs --max-time 3 -o /dev/null "http://127.0.0.1:$mp/ready" 2>/dev/null && return 0
+    sleep 2
+    i=$((i + 1))
+  done
+  return 1
 }
 
 argo_status() {
@@ -117,22 +131,37 @@ cmd_argo() {
         pset vless-ws fixed_host ""
         rm -f "$CUR/argo-fixed.env"
       else
-        if [ -z "$val" ]; then
-          say "$(t argo_fixed_intro "$(pget vless-ws port)")"
-          say ""
-          ask "$(t argo_ask_host)" "$(pget vless-ws fixed_host)"
-          val="$REPLY"
-        fi
-        valid_domain "$val" || { txn_abort; die "$(t bad_domain "$val")"; }
+        # 顺序跟随 Cloudflare 后台的流程：先拿令牌把连接器连上，再回后台设置域名，最后把域名填回来
         tok="${PBOX_ARGO_TOKEN:-}"
         if [ -z "$tok" ]; then
           [ "$ASSUME_YES" = 1 ] && { txn_abort; die "$(t argo_need_token)"; }
+          say "$(t argo_fixed_step1)"
+          say ""
           read_secret "$(t argo_ask_token)"
           tok="$REPLY"
         fi
         printf '%s' "$tok" | grep -Eq '^[A-Za-z0-9_=-]{20,}$' || { txn_abort; die "$(t argo_bad_token)"; }
-        pset vless-ws fixed_host "$val"
         (umask 077 && printf 'TUNNEL_TOKEN=%s\n' "$tok" >"$CUR/argo-fixed.env")
+        [ -n "$(pget vless-ws fixed_metrics)" ] || pset vless-ws fixed_metrics "$(random_port tcp)"
+        if [ -z "$val" ]; then
+          # 交互：先让连接器连上，用户才能在后台走下一步
+          edit_end
+          say ""
+          say "$(t argo_fixed_wait)"
+          if argo_fixed_ready; then
+            say "${C_G}$(t argo_fixed_connected)${C_0}"
+          else
+            warn "$(t argo_fixed_notconn)"
+          fi
+          say ""
+          say "$(t argo_fixed_step2 "$(pget vless-ws port)")"
+          say ""
+          ask "$(t argo_ask_host)" "$(pget vless-ws fixed_host)"
+          val="$REPLY"
+          txn_begin
+        fi
+        valid_domain "$val" || { txn_abort; die "$(t bad_domain "$val")"; }
+        pset vless-ws fixed_host "$val"
       fi
       ;;
     temp)

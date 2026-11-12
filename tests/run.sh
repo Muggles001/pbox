@@ -153,6 +153,7 @@ check "链接用隧道域名作地址和 Host" grep -q '@example-test.trycloudfl
 check "设置优选后多出一个优选节点，直连的仍保留" bash -c "bash dist/pbox.sh change vless-ws cdn www.visa.com.sg --yes && grep -q '@www.visa.com.sg:443?.*sni=example-test.trycloudflare.com.*Argo-Temp-Pref' '$(E)/nodes/links.txt' && grep -q '@example-test.trycloudflare.com:443.*Argo-Temp\$' '$(E)/nodes/links.txt'"
 check "加上固定隧道后共四个 Argo 节点" bash -c "PBOX_ARGO_TOKEN=eyJhIjoiMTIzNDU2Nzg5MGFiY2RlZiJ9 bash dist/pbox.sh argo fixed t.example.org --yes && test \"\$(grep -c Argo- '$(E)/nodes/links.txt')\" -eq 4 && grep -q 'sni=t.example.org.*Argo-Fixed-Pref' '$(E)/nodes/links.txt'"
 check "令牌不出现在生成的节点和内核配置里" bash -c "! grep -rq eyJhIjoi '$(E)/nodes' '$(E)/generated'"
+check "交互设置：先填令牌、再填域名" bash -c "printf 'eyJhIjoiYWJjZGVmMTIzNDU2Nzg5MCJ9\nt2.example.org\n' | bash dist/pbox.sh argo fixed && grep -q 'sni=t2.example.org' '$(E)/nodes/links.txt' && grep -q 'localhost:' <(printf 'eyJhIjoiYWJjZGVmMTIzNDU2Nzg5MCJ9\nt2.example.org\n' | bash dist/pbox.sh argo fixed)"
 check "非法令牌被拒绝" bash -c "! PBOX_ARGO_TOKEN='bad token' bash dist/pbox.sh argo fixed t.example.org --yes"
 check "可以只留固定隧道" bash -c "bash dist/pbox.sh argo temp off --yes && ! grep -q Argo-Temp '$(E)/nodes/links.txt'"
 check "两个隧道不能都关" bash -c "! bash dist/pbox.sh argo fixed off --yes"
