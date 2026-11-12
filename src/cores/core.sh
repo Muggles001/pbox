@@ -1,7 +1,9 @@
-core_bin() { case "$1" in xray) echo "$BINDIR/xray" ;; singbox) echo "$BINDIR/sing-box" ;; esac; }
-core_svc() { case "$1" in xray) echo pbox-xray ;; singbox) echo pbox-singbox ;; esac; }
-core_dir() { case "$1" in xray) echo xray ;; singbox) echo sing-box ;; esac; }
-core_title() { case "$1" in xray) echo "Xray $XRAY_VERSION" ;; singbox) echo "sing-box $SINGBOX_VERSION" ;; esac; }
+# Nginx 也按"内核"管理：同样走渲染、校验、替换、探活、回滚。它的程序来自发行版的软件包。
+CORES_ALL="xray singbox nginx"
+core_bin() { case "$1" in xray) echo "$BINDIR/xray" ;; singbox) echo "$BINDIR/sing-box" ;; nginx) nginx_bin ;; esac; }
+core_svc() { case "$1" in xray) echo pbox-xray ;; singbox) echo pbox-singbox ;; nginx) echo pbox-nginx ;; esac; }
+core_dir() { case "$1" in xray) echo xray ;; singbox) echo sing-box ;; nginx) echo nginx ;; esac; }
+core_title() { case "$1" in xray) echo "Xray $XRAY_VERSION" ;; singbox) echo "sing-box $SINGBOX_VERSION" ;; nginx) echo "Nginx" ;; esac; }
 core_pinned() { case "$1" in xray) echo "$XRAY_VERSION" ;; singbox) echo "$SINGBOX_VERSION" ;; esac; }
 
 core_url() {
@@ -27,6 +29,7 @@ core_cmd() {
   case "$1" in
     xray) echo "$BINDIR/xray run -confdir $GEN/xray" ;;
     singbox) echo "$BINDIR/sing-box run -C $GEN/sing-box -D $VARDIR" ;;
+    nginx) echo "$(nginx_bin) -c $GEN/nginx/nginx.conf -g 'daemon off;'" ;;
   esac
 }
 
@@ -34,6 +37,7 @@ core_cmd() {
 cores_needed() {
   local id
   for id in $(protos_enabled); do pmeta "$id" core; echo; done | sort -u
+  if site_on_p; then echo nginx; fi
 }
 
 # dl_verify <网址> <期望的 SHA256> <保存路径>
@@ -74,6 +78,10 @@ cores_ensure() {
   testing && return 0
   if proto_enabled vless-ws; then argo_ensure || return 1; fi
   for core in $(cores_needed); do
+    if [ "$core" = nginx ]; then
+      nginx_ensure || return 1
+      continue
+    fi
     [ "$(kv_get "$LIBDIR/installed.env" "$core")" = "$(core_pinned "$core")" ] && [ -x "$(core_bin "$core")" ] && continue
     todo="$todo $core"
   done
@@ -102,6 +110,7 @@ core_validate() { # <内核> <配置目录>，错误信息输出到标准输出
   b=$(core_bin "$1")
   [ -x "$b" ] || { testing && return 0; return 1; }
   case "$1" in
+    nginx) nginx_validate "$2" ;;
     xray) "$b" run -test -confdir "$2" 2>&1 ;;
     singbox) "$b" check -C "$2" 2>&1 ;;
   esac

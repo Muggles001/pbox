@@ -29,6 +29,7 @@ cmd_backup() {
   [ -d "$CUSTOM" ] && items="$items custom"
   # 域名证书的账号与续期信息，恢复到新机器后才能继续续期
   [ -d "$ACME_CONF" ] && items="$items acme"
+  [ -d "$SITE_DIR" ] && items="$items site"
   # shellcheck disable=SC2086
   (umask 077 && tar -czf - -C "$ETC" $items |
     openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:PBOX_BK_PASS -out "$f") || die "$(t bk_fail)"
@@ -69,6 +70,7 @@ cmd_restore() {
   mkdir -p "$CERTS" "$CUSTOM"
   [ -d "$tmp/certs" ] && cp -R "$tmp/certs/." "$CERTS/"
   [ -d "$tmp/custom" ] && cp -R "$tmp/custom/." "$CUSTOM/"
+  [ -d "$tmp/site" ] && mkdir -p "$SITE_DIR" && cp -R "$tmp/site/." "$SITE_DIR/"
   [ -d "$tmp/acme" ] && mkdir -p "$ACME_CONF" && cp -R "$tmp/acme/." "$ACME_CONF/" && chmod 700 "$ACME_CONF"
   rm -rf "$tmp"
   txn_commit || die "$(t apply_fail)"

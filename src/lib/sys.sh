@@ -252,7 +252,7 @@ fix_perms() {
   chgrp "$RUN_USER" "$ETC"
   [ -f "$ETC/resolv.conf" ] && chgrp "$RUN_USER" "$ETC/resolv.conf" && chmod 640 "$ETC/resolv.conf"
   local d
-  for d in "$GEN" "$CERTS" "$CUSTOM"; do
+  for d in "$GEN" "$CERTS" "$CUSTOM" "$ETC/site"; do
     [ -d "$d" ] || continue
     chgrp -R "$RUN_USER" "$d"
     find "$d" -type d -exec chmod 750 {} +

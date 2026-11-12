@@ -327,6 +327,30 @@ check "NAT 机器上说明不能用" bash -c "sed -i.bak 's/^nat=.*/nat=1/' '$(E
 
 check "NAT 机器可以用接口验证" bash -c "PBOX_CF_TOKEN=x bash dist/pbox.sh domain set d.example.com dns --yes && grep -q 'sni=d.example.com' '$(E)/nodes/links.txt'"
 
+echo "伪装站与 443 分流"
+new_root
+unset PBOX_TEST_DNS_A PBOX_TEST_DNS_AAAA
+PBOX_PROTOCOLS="reality-vision hysteria2 anytls" pbox install --yes >/dev/null 2>&1
+check "没有域名证书时不能开" bash -c "! bash dist/pbox.sh site on --yes"
+export PBOX_TEST_DNS_A=203.0.113.10
+pbox domain set w.example.com --yes >/dev/null 2>&1
+before=$(cat "$(E)/nodes/links.txt")
+check "开启伪装站" pbox site on --yes
+check "Reality 退到本机端口" bash -c "grep -q '\"listen\": \"127.0.0.1\"' '$(E)/generated/sing-box/10_reality-vision.json' && ! grep -q '\"listen_port\": 443' '$(E)/generated/sing-box/10_reality-vision.json'"
+check "分流规则：自己的域名给网站，其余给 Reality" bash -c "
+  sp=\$(sed -n 's/^site_port=//p' '$(E)/state/global.env'); rp=\$(sed -n 's/^site_front_port=//p' '$(E)/state/global.env')
+  grep -q \"w.example.com 127.0.0.1:\$sp;\" '$(E)/generated/nginx/nginx.conf' && grep -q \"default 127.0.0.1:\$rp;\" '$(E)/generated/nginx/nginx.conf' &&
+  grep -q \"\\\"listen_port\\\": \$rp\" '$(E)/generated/sing-box/10_reality-vision.json'"
+check "节点链接完全不变" test "$before" = "$(cat "$(E)/nodes/links.txt")"
+check "生成了内置页面" grep -q '<title>' "$(E)/site/index.html"
+check "来源可以换成转发一个网址" bash -c "bash dist/pbox.sh site source https://www.example.org/abc --yes && grep -q 'proxy_pass https://www.example.org;' '$(E)/generated/nginx/nginx.conf'"
+check "不合法的来源被拒绝" bash -c "! bash dist/pbox.sh site source http://x.example.org --yes"
+check "开着伪装站时不能停用域名或改用 IP" bash -c "! bash dist/pbox.sh domain off --yes && ! bash dist/pbox.sh domain set ip --yes"
+check "Reality 换到别的端口后不再经过分流" bash -c "bash dist/pbox.sh change reality-vision port 8444 --yes && grep -q '\"listen_port\": 8444' '$(E)/generated/sing-box/10_reality-vision.json' && ! grep -q 'site_front_port' /dev/null && grep -q \"default 127.0.0.1:\$(sed -n 's/^site_port=//p' '$(E)/state/global.env');\" '$(E)/generated/nginx/nginx.conf'"
+check "关闭后 Nginx 配置消失" bash -c "bash dist/pbox.sh site off --yes && ! test -e '$(E)/generated/nginx'"
+check "同域名的 TCP 协议占着 443 时拒绝" bash -c "bash dist/pbox.sh change anytls port 443 --yes && ! bash dist/pbox.sh site on --yes"
+unset PBOX_TEST_DNS_A
+
 echo "VLESS 的自定义选项"
 new_root
 PBOX_PROTOCOLS="reality-vision vless-ws" pbox install --yes >/dev/null 2>&1

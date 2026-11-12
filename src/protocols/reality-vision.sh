@@ -53,8 +53,8 @@ proto_reality_vision_render_inbound() {
     {
       "type": "vless",
       "tag": "reality-vision",
-      "listen": "$(listen_addr)",
-      "listen_port": $(pget reality-vision port),
+      "listen": "$(if front_on reality-vision; then echo 127.0.0.1; else listen_addr; fi)",
+      "listen_port": $(if front_on reality-vision; then gget site_front_port; else pget reality-vision port; fi),
       "users": [$users],
       "tls": {
         "enabled": true,

@@ -48,6 +48,10 @@ render_all() {
   for core in $(cores_needed); do
     d="$out/$(core_dir "$core")"
     mkdir -p "$d"
+    if [ "$core" = nginx ]; then
+      nginx_render >"$d/nginx.conf"
+      continue
+    fi
     core_render_base "$core" >"$d/00_base.json"
     for f in "$CUSTOM/$(core_dir "$core")"/*.json; do
       [ -f "$f" ] && cp "$f" "$d/90_custom_$(basename "$f")"
@@ -61,7 +65,7 @@ render_all() {
 
 validate_all() { # <目录>
   local core d msg rc=0
-  for core in xray singbox; do
+  for core in $CORES_ALL; do
     d="$1/$(core_dir "$core")"
     [ -d "$d" ] || continue
     if ! msg=$(core_validate "$core" "$d"); then
@@ -85,15 +89,17 @@ core_sync() {
     testing || svc_remove "$n"
     return 0
   fi
-  svc_write "$n" "$(core_cmd "$core")" "$([ "$core" = singbox ] && echo 1 || echo 0)"
+  svc_write "$n" "$(core_cmd "$core")" "$([ "$core" = xray ] && echo 0 || echo 1)"
   svc enable "$n"
   if ! svc active "$n"; then
+    # 内核的热重载是异步的：它让出 443 可能比这里晚一点，等它一下再启动 Nginx
+    [ "$core" = nginx ] && ! testing && for _ in 1 2 3 4 5 6 7 8 9 10; do port_in_use tcp 443 || break; sleep 0.5; done
     svc start "$n"
   elif [ "${UNIT_CHANGED:-0}" = 1 ]; then
     svc restart "$n"
   elif [ "$cfg" = 1 ]; then
-    # sing-box 支持热重载，连接不断；Xray 只能重启。
-    [ "$core" = singbox ] && svc reload "$n" 2>/dev/null || svc restart "$n"
+    # sing-box 和 Nginx 支持热重载，连接不断；Xray 只能重启。
+    [ "$core" != xray ] && svc reload "$n" 2>/dev/null || svc restart "$n"
   fi
 }
 
@@ -123,7 +129,13 @@ rollback() {
   [ -d "$PREV/generated" ] && cp -R "$PREV/generated" "$GEN"
   CUR="$STATE"
   fix_perms
-  for core in xray singbox; do core_sync "$core"; done
+  for core in $(cores_order); do core_sync "$core"; done
+}
+
+# 443 在 Nginx 和内核之间易手时，先处理让出端口的那一方：
+# 关闭分流时先停 Nginx，开启时先让内核退到本机端口。
+cores_order() {
+  if [ -d "$GEN/nginx" ]; then echo "xray singbox nginx"; else echo "nginx xray singbox"; fi
 }
 
 # 上一次提交若在替换途中被强行终止，这里把目录复原到替换之前。每次启动时调用。
@@ -146,7 +158,7 @@ txn_commit() {
     txn_abort
     return 1
   fi
-  for core in xray singbox; do
+  for core in $CORES_ALL; do
     d=$(core_dir "$core")
     if [ -d "$GEN/$d" ] || [ -d "$new/generated/$d" ]; then
       diff -rq "$GEN/$d" "$new/generated/$d" >/dev/null 2>&1 || changed="$changed $core"
@@ -177,7 +189,7 @@ txn_commit() {
   CUR="$STATE"
   manifest_add dir "$ETC"
   fix_perms
-  for core in xray singbox; do
+  for core in $(cores_order); do
     case " $changed " in *" $core "*) core_sync "$core" 1 ;; *) core_sync "$core" 0 ;; esac
   done
   if ! probe; then

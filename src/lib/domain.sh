@@ -173,6 +173,7 @@ domain_set() { # <域名|ip> [dns]
   fi
   dom=$(printf '%s' "$dom" | tr 'A-Z' 'a-z')
   if [ "$dom" = ip ]; then
+    site_on_p && die "$(t site_blocks_domain)"
     dom=$(gget ip4)
     # 只为 IPv4 申请：IPv6 的情况没有验证过
     [ -n "$dom" ] || die "$(t dom_ip_no4)"
@@ -253,6 +254,7 @@ domain_off() {
   detect_sys
   dom=$(gget tls_domain)
   [ -n "$dom" ] || die "$(t dom_not_set)"
+  site_on_p && die "$(t site_blocks_domain)"
   confirm "$(t dom_off_q)" n || die "$(t cancelled)"
   edit_begin
   gset tls_domain ""

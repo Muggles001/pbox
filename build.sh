@@ -13,6 +13,7 @@ src/lib/net.sh
 src/lib/state.sh
 src/lib/cert.sh
 src/lib/domain.sh
+src/lib/site.sh
 src/lib/reality.sh
 src/cores/core.sh
 src/protocols/reality-vision.sh

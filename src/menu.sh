@@ -271,6 +271,8 @@ menu_domain() {
     item 3 md_ip md_ip_d
     item 4 md_renew md_renew_d
     item 5 md_off md_off_d
+    printf "$T_m_fmt" 6 "$(t md_site)" "${C_D}[$(onoff "$(site_on_p && echo 1 || echo 0)")] $(t md_site_d)${C_0}"
+    printf "$T_m_fmt" 7 "$(t md_source)" "${C_D}[$(site_source)] $(t md_source_d)${C_0}"
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -285,6 +287,11 @@ menu_domain() {
       3) run cmd_domain set ip ;;
       4) run cmd_domain renew ;;
       5) run cmd_domain off ;;
+      6) if site_on_p; then run cmd_site off; else run cmd_site on; fi ;;
+      7)
+        ask " $(t site_ask_source)" "builtin"
+        run cmd_site source "$REPLY"
+        ;;
       *) return 0 ;;
     esac
   done

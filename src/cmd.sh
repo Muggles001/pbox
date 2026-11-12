@@ -504,6 +504,7 @@ pbox $PBOX_VERSION
   pbox warp [on|off|all|domains a.com,b.com|status|test]
   pbox bbr [on|off|status]
   pbox domain [status|set DOMAIN [dns]|set ip|off|renew]
+  pbox site [status|on|off|source <builtin|https://URL>]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE
   pbox update   pbox uninstall   pbox lang
