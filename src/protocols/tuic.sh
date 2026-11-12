@@ -50,8 +50,8 @@ proto_tuic_render_inbound() {
       "tls": {
         "enabled": true,
         "alpn": ["h3"],
-        "certificate_path": "$certs/tuic.crt",
-        "key_path": "$certs/tuic.key"
+        "certificate_path": "$certs/$(tls_name tuic).crt",
+        "key_path": "$certs/$(tls_name tuic).key"
       }
     }
   ]
@@ -60,8 +60,10 @@ EOF
 }
 
 proto_tuic_share_link() {
-  printf 'tuic://%s:%s@%s:%s?congestion_control=%s&udp_relay_mode=native&alpn=h3&sni=%s&allow_insecure=1#%s\n' \
-    "$(uget "$1" uuid)" "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport tuic)" "$(pget tuic cc bbr)" "$(pget tuic sni)" "$3"
+  local ins="&allow_insecure=1"
+  tls_real && ins=""
+  printf 'tuic://%s:%s@%s:%s?congestion_control=%s&udp_relay_mode=native&alpn=h3&sni=%s%s#%s\n' \
+    "$(uget "$1" uuid)" "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport tuic)" "$(pget tuic cc bbr)" "$(tls_sni tuic)" "$ins" "$3"
 }
 
 proto_tuic_client_singbox() {
@@ -76,9 +78,8 @@ proto_tuic_client_singbox() {
       "congestion_control": "$(pget tuic cc bbr)",
       "tls": {
         "enabled": true,
-        "server_name": "$(pget tuic sni)",
-        "alpn": ["h3"],
-        "certificate_public_key_sha256": ["$(pget tuic cert_spki)"]
+        "server_name": "$(tls_sni tuic)",
+        "alpn": ["h3"]$(tls_sb_pin tuic)
       }
     }
 EOF
@@ -95,8 +96,8 @@ proto_tuic_client_mihomo() {
     alpn: [h3]
     udp-relay-mode: native
     congestion-controller: $(pget tuic cc bbr)
-    sni: "$(pget tuic sni)"
-    fingerprint: "$(pget tuic cert_sha256)"
+    sni: "$(tls_sni tuic)"
+    $(tls_mh_pin tuic)
 EOF
 }
 
@@ -108,8 +109,8 @@ proto_tuic_selftest() {
  "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
  "outbounds": [{"type": "tuic", "server": "127.0.0.1", "server_port": $(pget tuic port),
   "uuid": "$(uget "$u" uuid)", "password": "$(uget "$u" password)", "congestion_control": "$(pget tuic cc bbr)",
-  "tls": {"enabled": true, "server_name": "$(pget tuic sni)", "alpn": ["h3"],
-   "certificate_public_key_sha256": ["$(pget tuic cert_spki)"]}}]}
+  "tls": {"enabled": true, "server_name": "$(tls_sni tuic)", "alpn": ["h3"],
+   "certificate_public_key_sha256": ["$(tls_spki tuic)"]}}]}
 EOF
   selftest singbox "$d/c.json" "$p"
   rc=$?

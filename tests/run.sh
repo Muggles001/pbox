@@ -296,6 +296,23 @@ check "关闭订阅时撤出本机的节点" bash -c "PBOX_ROOT='$B' bash dist/p
 check "最后一台卸载后仓库里不留订阅文件" bash -c "PBOX_ROOT='$A' bash dist/pbox.sh uninstall --yes && test -z \"\$(ls '$PBOX_SUB_DIR')\""
 unset PBOX_SUB_DIR PBOX_SUB_PROJECT PBOX_SUB_WTOKEN PBOX_SUB_RTOKEN PBOX_TEST_REGION
 
+echo "域名证书"
+new_root
+unset PBOX_TEST_DNS_A PBOX_TEST_DNS_AAAA
+PBOX_PROTOCOLS="reality-vision hysteria2 tuic anytls" pbox install --yes >/dev/null 2>&1
+check "解析没指向本机时在申请前就拒绝" bash -c "! PBOX_TEST_DNS_A=198.51.100.9 bash dist/pbox.sh domain set a.example.com --yes"
+check "没有解析记录时拒绝" bash -c "! bash dist/pbox.sh domain set a.example.com --yes"
+export PBOX_TEST_DNS_A=203.0.113.10
+check "设置域名" pbox domain set A.Example.com --yes
+check "域名统一成小写保存" grep -qx 'tls_domain=a.example.com' "$(E)/state/global.env"
+check "三个协议的服务端都改用域名证书" bash -c "for p in hysteria2 tuic anytls; do grep -q 'certs/domain.crt' '$(E)/generated/sing-box/'*\$p.json || exit 1; done"
+check "链接里用域名验证，不再固定指纹或跳过验证" bash -c "grep -q '^tuic://.*sni=a.example.com' '$(E)/nodes/links.txt' && ! grep -E '^(hysteria2|tuic|anytls)://' '$(E)/nodes/links.txt' | grep -v 'sni=a.example.com' | grep -q . && ! grep -Eq 'pinSHA256|insecure' '$(E)/nodes/links.txt'"
+check "Reality 不受影响" bash -c "grep '^vless://' '$(E)/nodes/links.txt' | grep -q 'sni=www.example.org'"
+check "客户端配置合法且不带指纹" bash -c "python3 -m json.tool '$(E)/nodes/sing-box.json' && ! grep -q certificate_public_key_sha256 '$(E)/nodes/sing-box.json' && ! grep -q 'fingerprint: \"' '$(E)/nodes/mihomo.yaml'"
+check "停用后回到自签证书和指纹固定" bash -c "bash dist/pbox.sh domain off --yes && grep -q 'certs/hysteria2.crt' '$(E)/generated/sing-box/'*hysteria2.json && grep -q pinSHA256 '$(E)/nodes/links.txt' && ! test -e '$(E)/certs/domain.crt'"
+unset PBOX_TEST_DNS_A
+check "NAT 机器上说明不能用" bash -c "sed -i.bak 's/^nat=.*/nat=1/' '$(E)/state/global.env'; grep -q '^nat=1' '$(E)/state/global.env' || echo nat=1 >>'$(E)/state/global.env'; ! PBOX_TEST_DNS_A=203.0.113.10 bash dist/pbox.sh domain set a.example.com --yes"
+
 echo "BBR"
 new_root
 pbox install --yes >/dev/null 2>&1

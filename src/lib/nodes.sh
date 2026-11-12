@@ -127,7 +127,7 @@ nodes_show() {
   fi
   say "  $(t nodes_qr)        pbox qr"
   say "  $(t nodes_files)   ${NODES#"$R"}/"
-  proto_enabled hysteria2 && say "  ${C_D}$(t nodes_pin_hint)${C_0}"
+  proto_enabled hysteria2 && ! tls_real && say "  ${C_D}$(t nodes_pin_hint)${C_0}"
   say ""
   if [ "$(gget nat 0)" = 1 ]; then
     note "$(t nodes_nat)"

@@ -48,8 +48,8 @@ proto_anytls_render_inbound() {
       "users": [$users],
       "tls": {
         "enabled": true,
-        "certificate_path": "$certs/anytls.crt",
-        "key_path": "$certs/anytls.key"
+        "certificate_path": "$certs/$(tls_name anytls).crt",
+        "key_path": "$certs/$(tls_name anytls).key"
       }
     }
   ]
@@ -58,8 +58,10 @@ EOF
 }
 
 proto_anytls_share_link() {
-  printf 'anytls://%s@%s:%s?security=tls&sni=%s&insecure=1#%s\n' \
-    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport anytls)" "$(pget anytls sni)" "$3"
+  local ins="&insecure=1"
+  tls_real && ins=""
+  printf 'anytls://%s@%s:%s?security=tls&sni=%s%s#%s\n' \
+    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport anytls)" "$(tls_sni anytls)" "$ins" "$3"
 }
 
 proto_anytls_client_singbox() {
@@ -72,8 +74,7 @@ proto_anytls_client_singbox() {
       "password": "$(uget "$1" password)",
       "tls": {
         "enabled": true,
-        "server_name": "$(pget anytls sni)",
-        "certificate_public_key_sha256": ["$(pget anytls cert_spki)"]
+        "server_name": "$(tls_sni anytls)"$(tls_sb_pin anytls)
       }
     }
 EOF
@@ -88,8 +89,8 @@ proto_anytls_client_mihomo() {
     password: "$(uget "$1" password)"
     udp: true
     client-fingerprint: chrome
-    sni: "$(pget anytls sni)"
-    fingerprint: "$(pget anytls cert_sha256)"
+    sni: "$(tls_sni anytls)"
+    $(tls_mh_pin anytls)
 EOF
 }
 
@@ -101,8 +102,8 @@ proto_anytls_selftest() {
  "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
  "outbounds": [{"type": "anytls", "server": "127.0.0.1", "server_port": $(pget anytls port),
   "password": "$(uget "$u" password)",
-  "tls": {"enabled": true, "server_name": "$(pget anytls sni)",
-   "certificate_public_key_sha256": ["$(pget anytls cert_spki)"]}}]}
+  "tls": {"enabled": true, "server_name": "$(tls_sni anytls)",
+   "certificate_public_key_sha256": ["$(tls_spki anytls)"]}}]}
 EOF
   selftest singbox "$d/c.json" "$p"
   rc=$?

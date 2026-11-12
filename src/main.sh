@@ -34,6 +34,7 @@ main() {
     sub) cmd_sub "$@" ;;
     warp) cmd_warp "$@" ;;
     bbr) cmd_bbr "$@" ;;
+    domain) cmd_domain "$@" ;;
     argo) cmd_argo "$@" ;;
     firewall) cmd_firewall ;;
     rollback) cmd_rollback ;;

@@ -163,7 +163,7 @@ cmd_doctor() {
   local report="${1:-}" pass=0 total=0 out fn id
   need_installed
   out=$(mktemp)
-  for fn in d_services d_config d_ports d_firewall d_dns d_time d_egress; do
+  for fn in d_services d_config d_ports d_firewall d_dns d_time d_egress d_domain; do
     total=$((total + 1))
     if "$fn" >>"$out" 2>&1; then pass=$((pass + 1)); fi
   done

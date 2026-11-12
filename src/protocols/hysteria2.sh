@@ -46,8 +46,8 @@ proto_hysteria2_render_inbound() {
       "tls": {
         "enabled": true,
         "alpn": ["h3"],
-        "certificate_path": "$certs/hysteria2.crt",
-        "key_path": "$certs/hysteria2.key"
+        "certificate_path": "$certs/$(tls_name hysteria2).crt",
+        "key_path": "$certs/$(tls_name hysteria2).key"
       }
     }
   ]
@@ -76,13 +76,15 @@ hy2_obfs_mihomo() {
   return 0
 }
 
-# 自签证书配指纹固定。只有用户明确要求（第 4 个参数为 insecure）才输出跳过验证的链接。
+# 自签证书配指纹固定，只有用户明确要求（第 4 个参数为 insecure）才输出跳过验证的链接；
+# 有正规证书时两者都不需要。
 proto_hysteria2_share_link() {
-  local tail="pinSHA256=$(pget hysteria2 cert_sha256)"
-  [ "${4:-}" = insecure ] && tail="insecure=1"
+  local tail="&pinSHA256=$(pget hysteria2 cert_sha256)"
+  [ "${4:-}" = insecure ] && tail="&insecure=1"
+  tls_real && tail=""
   tail="$tail$(hop_query)$(hy2_obfs_query)"
-  printf 'hysteria2://%s@%s:%s/?sni=%s&%s#%s\n' \
-    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport hysteria2)" "$(pget hysteria2 sni)" "$tail" "$3"
+  printf 'hysteria2://%s@%s:%s/?sni=%s%s#%s\n' \
+    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport hysteria2)" "$(tls_sni hysteria2)" "$tail" "$3"
 }
 
 proto_hysteria2_client_singbox() {
@@ -96,9 +98,8 @@ proto_hysteria2_client_singbox() {
       "password": "$(uget "$1" password)",$(hy2_obfs_json)
       "tls": {
         "enabled": true,
-        "server_name": "$(pget hysteria2 sni)",
-        "alpn": ["h3"],
-        "certificate_public_key_sha256": ["$(pget hysteria2 cert_spki)"]
+        "server_name": "$(tls_sni hysteria2)",
+        "alpn": ["h3"]$(tls_sb_pin hysteria2)
       }
     }
 EOF
@@ -113,9 +114,9 @@ proto_hysteria2_client_mihomo() {
     $(hop_mihomo)
     $(hy2_obfs_mihomo)
     password: "$(uget "$1" password)"
-    sni: "$(pget hysteria2 sni)"
+    sni: "$(tls_sni hysteria2)"
     alpn: [h3]
-    fingerprint: "$(pget hysteria2 cert_sha256)"
+    $(tls_mh_pin hysteria2)
 EOF
 }
 
@@ -127,8 +128,8 @@ proto_hysteria2_selftest() {
  "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
  "outbounds": [{"type": "hysteria2", "server": "127.0.0.1", "server_port": $(pget hysteria2 port),
   "password": "$(uget "$u" password)",$(hy2_obfs_json)
-  "tls": {"enabled": true, "server_name": "$(pget hysteria2 sni)", "alpn": ["h3"],
-   "certificate_public_key_sha256": ["$(pget hysteria2 cert_spki)"]}}]}
+  "tls": {"enabled": true, "server_name": "$(tls_sni hysteria2)", "alpn": ["h3"],
+   "certificate_public_key_sha256": ["$(tls_spki hysteria2)"]}}]}
 EOF
   selftest singbox "$d/c.json" "$p"
   rc=$?
@@ -153,6 +154,7 @@ proto_hysteria2_doctor() {
       return 1
     fi
   fi
+  tls_real && return 0
   if cert_valid_days "$CERTS/hysteria2.crt" 30; then
     ok "$(t d_cert_ok Hysteria2)"
   else

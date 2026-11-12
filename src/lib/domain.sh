@@ -1,0 +1,246 @@
+# 域名模式：用自己的域名申请受信任的证书，Hysteria2、TUIC、AnyTLS 改用它。
+# 之后客户端按正常方式验证证书，不再需要指纹固定，也不再有"跳过证书验证"的链接。
+#
+# 证书由 acme.sh 向 Let's Encrypt 申请。acme.sh 只取它的主程序一个文件，版本与哈希锁定，
+# 不走它自己的安装流程：不改 shell 配置、不装它的定时任务，续期由本脚本自己的定时器触发。
+# 验证方式是 HTTP-01：签发方会来访问本机的 80 端口，所以申请和续期时 80 端口都必须可达且空闲。
+
+ACME_HOME="$LIBDIR/acme"
+ACME_CONF="$ETC/acme"
+DOMAIN_CRT="$CERTS/domain.crt"
+DOMAIN_KEY="$CERTS/domain.key"
+
+# 以下几个函数供协议模块使用：有正规证书时用域名和它的证书，否则用各协议自己的自签证书。
+tls_real() { [ -n "$(gget tls_domain)" ]; }
+tls_name() { if tls_real; then echo domain; else echo "$1"; fi; }
+tls_sni() { if tls_real; then gget tls_domain; else pget "$1" sni; fi; }
+# 自测用的本机客户端始终固定公钥，这样用测试签发方的证书时也能自测
+tls_spki() { if tls_real; then cert_spki "$DOMAIN_CRT"; else pget "$1" cert_spki; fi; }
+# 给客户端的输出：正规证书不带指纹（续期后指纹会变，而客户端本来就能验证它）
+tls_sb_pin() {
+  tls_real && return 0
+  printf ',\n        "certificate_public_key_sha256": ["%s"]' "$(pget "$1" cert_spki)"
+}
+tls_mh_pin() {
+  tls_real && return 0
+  printf 'fingerprint: "%s"' "$(pget "$1" cert_sha256)"
+}
+
+acme() { "$ACME_HOME/acme.sh" --home "$ACME_HOME" --config-home "$ACME_CONF" "$@"; }
+acme_server() { printf '%s' "${PBOX_ACME_SERVER:-letsencrypt}"; }
+
+acme_ensure() {
+  local tmp
+  [ -x "$ACME_HOME/acme.sh" ] && [ "$(sha256_of "$ACME_HOME/acme.sh")" = "$ACME_SHA256" ] && return 0
+  tmp=$(mktemp -d)
+  dl_verify "https://raw.githubusercontent.com/acmesh-official/acme.sh/$ACME_VERSION/acme.sh" "$ACME_SHA256" "$tmp/acme.sh" || { rm -rf "$tmp"; return 1; }
+  mkdir -p "$ACME_HOME" "$ACME_CONF"
+  install -m 0755 "$tmp/acme.sh" "$ACME_HOME/acme.sh"
+  rm -rf "$tmp"
+  chmod 700 "$ACME_CONF"
+}
+
+# 把签下来的证书放到内核读取的位置
+domain_install_cert() { # <域名>
+  mkdir -p "$CERTS"
+  if testing; then
+    cert_selfsigned domain "$1"
+    return
+  fi
+  acme --install-cert -d "$1" --ecc --fullchain-file "$DOMAIN_CRT" --key-file "$DOMAIN_KEY" >/dev/null 2>&1 || return 1
+  fix_perms
+}
+
+# 续期定时器：每天检查一次，证书临近到期时 acme.sh 才会真的续
+domain_timer() { # <on|off>
+  local f
+  testing && return 0
+  if [ "$INIT" = systemd ]; then
+    if [ "$1" = off ]; then
+      systemctl disable --now pbox-renew.timer >/dev/null 2>&1
+      for f in /etc/systemd/system/pbox-renew.service /etc/systemd/system/pbox-renew.timer; do
+        [ -f "$f" ] && rm -f "$f" && manifest_del file "$f"
+      done
+      systemctl daemon-reload
+      return 0
+    fi
+    cat >/etc/systemd/system/pbox-renew.service <<EOF
+[Unit]
+Description=pbox certificate renewal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$LIBDIR/pbox.sh domain renew
+EOF
+    cat >/etc/systemd/system/pbox-renew.timer <<EOF
+[Unit]
+Description=pbox certificate renewal check
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    manifest_add file /etc/systemd/system/pbox-renew.service
+    manifest_add file /etc/systemd/system/pbox-renew.timer
+    systemctl daemon-reload
+    systemctl enable --now pbox-renew.timer >/dev/null 2>&1
+  else
+    f=/etc/periodic/daily/pbox-renew
+    if [ "$1" = off ]; then
+      [ -f "$f" ] && rm -f "$f" && manifest_del file "$f"
+      return 0
+    fi
+    mkdir -p /etc/periodic/daily
+    printf '#!/bin/sh\nexec %s domain renew\n' "$LIBDIR/pbox.sh" >"$f"
+    chmod 755 "$f"
+    manifest_add file "$f"
+  fi
+}
+
+# 申请前的检查：问题在这里指出，而不是等签发方报一个看不懂的错
+domain_precheck() { # <域名>
+  local dom="$1" ip4 ip6 got owner
+  valid_domain "$dom" || die "$(t bad_domain "$dom")"
+  [ "$(gget nat 0)" = 1 ] && die "$(t dom_nat)"
+  ip4=$(gget ip4) ip6=$(gget ip6)
+  got=$( { resolve A "$dom"; resolve AAAA "$dom"; } | tr '\n' ' ')
+  [ -n "${got// /}" ] || die "$(t dom_no_dns "$dom" "${ip4:-$ip6}")"
+  if ! { [ -n "$ip4" ] && resolve A "$dom" | grep -qxF "$ip4"; } && ! { [ -n "$ip6" ] && resolve AAAA "$dom" | grep -qxF "$ip6"; }; then
+    die "$(t dom_wrong_dns "$dom" "$got" "${ip4:-$ip6}")"
+  fi
+  if ! testing && port_in_use tcp 80; then
+    owner=$(port_owner tcp 80)
+    die "$(t dom_80_busy "${owner:-?}")"
+  fi
+  return 0
+}
+
+domain_set() { # <域名>
+  local dom="${1:-}" be log
+  need_root
+  need_installed
+  detect_sys
+  if [ -z "$dom" ]; then
+    ask "$(t dom_ask)" ""
+    dom="$REPLY"
+  fi
+  dom=$(printf '%s' "$dom" | tr 'A-Z' 'a-z')
+  domain_precheck "$dom"
+  head1 "$(t dom_plan_title)"
+  say "$(t dom_plan "$dom")"
+  say ""
+  confirm "$(t dom_plan_q)" || die "$(t cancelled)"
+  if ! testing; then
+    if ! has socat; then
+      say "$(t deps_missing " socat")"
+      pkg_install socat >/dev/null || die "$(t deps_fail " socat")"
+    fi
+    acme_ensure || die "$(t dl_abort)"
+    be=$(fw_backend)
+    [ -n "$be" ] && { fw_is_open "$be" 80/tcp || fw_open "$be" 80/tcp; }
+    say "$(t dom_issuing)"
+    log="$LOGDIR/acme.log"
+    mkdir -p "$LOGDIR"
+    if ! acme --issue --standalone -d "$dom" --server "$(acme_server)" --keylength ec-256 --log "$log" >/dev/null 2>&1; then
+      # 已经签过且尚未到期时 acme.sh 返回"跳过"，这不算失败
+      [ -f "$ACME_CONF/${dom}_ecc/fullchain.cer" ] || die "$(t dom_issue_fail "$log")"
+    fi
+  fi
+  domain_install_cert "$dom" || die "$(t dom_issue_fail "$LOGDIR/acme.log")"
+  edit_begin
+  gset tls_domain "$dom"
+  edit_end
+  domain_timer on
+  say "${C_G}$(t dom_done "$dom")${C_0}"
+}
+
+domain_off() {
+  local dom be
+  need_root
+  need_installed
+  detect_sys
+  dom=$(gget tls_domain)
+  [ -n "$dom" ] || die "$(t dom_not_set)"
+  confirm "$(t dom_off_q)" n || die "$(t cancelled)"
+  edit_begin
+  gset tls_domain ""
+  edit_end
+  domain_timer off
+  if ! testing; then
+    acme --remove -d "$dom" --ecc >/dev/null 2>&1
+    rm -rf "$ACME_CONF/${dom}_ecc"
+    be=$(fw_backend)
+    [ -n "$be" ] && grep -qxF "fw	$be 80/tcp" "$MANIFEST" 2>/dev/null && fw_close "$be" 80/tcp
+  fi
+  rm -f "$DOMAIN_CRT" "$DOMAIN_KEY"
+  say "$(t dom_off_done)"
+}
+
+# 由定时器调用。证书没到续期时间时 acme.sh 返回 2，什么都不做。
+domain_renew() {
+  local dom core rc
+  need_root
+  dom=$(kv_get "$STATE/global.env" tls_domain)
+  [ -n "$dom" ] || return 0
+  detect_sys
+  lock_try || return 0
+  acme --renew -d "$dom" --ecc --server "$(acme_server)" --log "$LOGDIR/acme.log" >/dev/null 2>&1
+  rc=$?
+  if [ $rc = 0 ]; then
+    domain_install_cert "$dom"
+    for core in $(cores_needed); do svc restart "$(core_svc "$core")"; done
+  fi
+  unlock
+  [ $rc = 0 ] || [ $rc = 2 ]
+}
+
+cert_end_date() { openssl x509 -in "$1" -noout -enddate 2>/dev/null | sed 's/^notAfter=//'; }
+
+domain_status() {
+  local dom
+  dom=$(gget tls_domain)
+  if [ -z "$dom" ]; then
+    say "$(t dom_not_set)"
+    return 0
+  fi
+  say "$(t dom_status "$dom" "$(cert_end_date "$DOMAIN_CRT")")"
+}
+
+# 体检项：证书还剩多久、域名是否仍然指向本机
+d_domain() {
+  local dom ip4 ip6
+  dom=$(gget tls_domain)
+  [ -n "$dom" ] || return 0
+  if cert_valid_days "$DOMAIN_CRT" 15; then
+    ok "$(t d_dom_cert_ok "$dom" "$(cert_end_date "$DOMAIN_CRT")")"
+  else
+    bad "$(t d_dom_cert_bad "$dom")"
+    hint "pbox domain renew"
+    hint "$LOGDIR/acme.log"
+    return 1
+  fi
+  ip4=$(gget ip4) ip6=$(gget ip6)
+  if { [ -n "$ip4" ] && resolve A "$dom" | grep -qxF "$ip4"; } || { [ -n "$ip6" ] && resolve AAAA "$dom" | grep -qxF "$ip6"; }; then
+    ok "$(t d_dom_dns_ok "$dom")"
+  else
+    bad "$(t d_dom_dns_bad "$dom" "${ip4:-$ip6}")"
+    return 1
+  fi
+}
+
+# pbox domain [status|set 域名|off|renew]
+cmd_domain() {
+  case "${1:-status}" in
+    set) domain_set "${2:-}" ;;
+    off) domain_off ;;
+    renew) domain_renew ;;
+    status) need_root; need_installed; domain_status ;;
+    *) cmd_help ;;
+  esac
+}

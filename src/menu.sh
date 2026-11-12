@@ -231,6 +231,27 @@ menu_addr_mode() {
   run cmd_set addr-mode "$mode" "$dom"
 }
 
+menu_domain() {
+  while :; do
+    menu_header "$(t mset_domain)"
+    printf '  %s%s%s\n\n' "$C_D" "$(domain_status)" "$C_0"
+    item 1 md_set md_set_d
+    item 2 md_renew md_renew_d
+    item 3 md_off md_off_d
+    item 0 m_back m_blank
+    choose
+    case "$REPLY" in
+      1)
+        ask " $(t dom_ask)" ""
+        [ -n "$REPLY" ] && run cmd_domain set "$REPLY"
+        ;;
+      2) run cmd_domain renew ;;
+      3) run cmd_domain off ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
 menu_settings() {
   local v
   while :; do
@@ -244,6 +265,7 @@ menu_settings() {
     item 7 mset_lang mset_lang_d
     printf "$T_m_fmt" 8 "$(t mset_warp)" "${C_D}[$(onoff "$([ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && echo 1 || echo 0)")] $(t mset_warp_d)${C_0}"
     printf "$T_m_fmt" 9 "$(t mset_bbr)" "${C_D}[$(onoff "$([ "$(bbr_cur)" = bbr ] && echo 1 || echo 0)")] $(t mset_bbr_d)${C_0}"
+    printf "$T_m_fmt" d "$(t mset_domain)" "${C_D}[$(gget tls_domain -)] $(t mset_domain_d)${C_0}"
     item u m_uninstall m_uninstall_d
     item 0 m_back m_blank
     choose
@@ -274,6 +296,7 @@ menu_settings() {
         [ "$(bbr_cur)" = bbr ] && v=off
         run cmd_bbr "$v"
         ;;
+      d | D) menu_domain ;;
       u | U)
         echo
         (cmd_uninstall)
