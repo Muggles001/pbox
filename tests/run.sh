@@ -163,6 +163,13 @@ check "关闭优选后只剩直连节点" bash -c "bash dist/pbox.sh change vles
 check "WARP 网站名单可恢复默认" bash -c "bash dist/pbox.sh warp on --yes && bash dist/pbox.sh warp domains a.example.com --yes && bash dist/pbox.sh warp domains default --yes && grep -q openai.com '$(E)/generated/sing-box/00_base.json' && bash dist/pbox.sh warp off --yes"
 check "删除 Argo 节点" pbox del vless-ws --yes
 
+echo "进阶选项"
+check "开启 Hysteria2 混淆" pbox change hysteria2 obfs on --yes
+check "服务端、链接、两种客户端配置都带上混淆" bash -c "grep -q salamander '$(E)/generated/sing-box/10_hysteria2.json' && grep -q 'obfs=salamander&obfs-password=' '$(E)/nodes/links.txt' && grep -q 'obfs: salamander' '$(E)/nodes/mihomo.yaml' && python3 -m json.tool '$(E)/nodes/sing-box.json' && python3 -m json.tool '$(E)/generated/sing-box/10_hysteria2.json'"
+check "关闭混淆后不留痕迹" bash -c "bash dist/pbox.sh change hysteria2 obfs off --yes && ! grep -rq salamander '$(E)/generated' '$(E)/nodes'"
+check "非法的 WS 路径被拒绝" bash -c "bash dist/pbox.sh add vless-ws --yes && ! bash dist/pbox.sh change vless-ws path 'no slash' --yes"
+check "可以自定义 WS 路径" bash -c "bash dist/pbox.sh change vless-ws path /my-path_1 --yes && grep -q '\"path\": \"/my-path_1\"' '$(E)/generated/sing-box/10_vless-ws.json' && grep -q 'path=%2Fmy-path_1' '$(E)/nodes/links.txt' && bash dist/pbox.sh del vless-ws --yes"
+
 echo "端口跳跃"
 check "开启端口跳跃" pbox change hysteria2 hop 30000-30999 --yes
 check "链接里带上跳跃范围" grep -q ':443/?.*&mport=30000-30999#' "$(E)/nodes/links.txt"

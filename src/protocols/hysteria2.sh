@@ -42,7 +42,7 @@ proto_hysteria2_render_inbound() {
       "tag": "hysteria2",
       "listen": "$(listen_addr)",
       "listen_port": $(pget hysteria2 port),
-      "users": [$users],
+      "users": [$users],$(hy2_obfs_json)
       "tls": {
         "enabled": true,
         "alpn": ["h3"],
@@ -55,11 +55,32 @@ proto_hysteria2_render_inbound() {
 EOF
 }
 
+# Salamander 混淆（进阶，默认关闭）：把流量打乱成看不出是 QUIC 的样子，用于 QUIC 本身被针对的网络。
+# 代价是流量不再像 HTTP/3，所以它和"伪装成 HTTP/3"是二选一。
+hy2_obfs_json() {
+  local pw
+  pw=$(pget hysteria2 obfs_password)
+  [ -n "$pw" ] && printf '\n      "obfs": {"type": "salamander", "password": "%s"},' "$pw"
+  return 0
+}
+hy2_obfs_query() {
+  local pw
+  pw=$(pget hysteria2 obfs_password)
+  [ -n "$pw" ] && printf '&obfs=salamander&obfs-password=%s' "$pw"
+  return 0
+}
+hy2_obfs_mihomo() {
+  local pw
+  pw=$(pget hysteria2 obfs_password)
+  [ -n "$pw" ] && printf 'obfs: salamander\n    obfs-password: "%s"' "$pw"
+  return 0
+}
+
 # 自签证书配指纹固定。只有用户明确要求（第 4 个参数为 insecure）才输出跳过验证的链接。
 proto_hysteria2_share_link() {
   local tail="pinSHA256=$(pget hysteria2 cert_sha256)"
   [ "${4:-}" = insecure ] && tail="insecure=1"
-  tail="$tail$(hop_query)"
+  tail="$tail$(hop_query)$(hy2_obfs_query)"
   printf 'hysteria2://%s@%s:%s/?sni=%s&%s#%s\n' \
     "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport hysteria2)" "$(pget hysteria2 sni)" "$tail" "$3"
 }
@@ -72,7 +93,7 @@ proto_hysteria2_client_singbox() {
       "server": "$2",
       "server_port": $(pubport hysteria2),
       $(hop_singbox)
-      "password": "$(uget "$1" password)",
+      "password": "$(uget "$1" password)",$(hy2_obfs_json)
       "tls": {
         "enabled": true,
         "server_name": "$(pget hysteria2 sni)",
@@ -90,6 +111,7 @@ proto_hysteria2_client_mihomo() {
     server: "$2"
     port: $(pubport hysteria2)
     $(hop_mihomo)
+    $(hy2_obfs_mihomo)
     password: "$(uget "$1" password)"
     sni: "$(pget hysteria2 sni)"
     alpn: [h3]
@@ -104,7 +126,7 @@ proto_hysteria2_selftest() {
 {"log": {"disabled": true},
  "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
  "outbounds": [{"type": "hysteria2", "server": "127.0.0.1", "server_port": $(pget hysteria2 port),
-  "password": "$(uget "$u" password)",
+  "password": "$(uget "$u" password)",$(hy2_obfs_json)
   "tls": {"enabled": true, "server_name": "$(pget hysteria2 sni)", "alpn": ["h3"],
    "certificate_public_key_sha256": ["$(pget hysteria2 cert_spki)"]}}]}
 EOF

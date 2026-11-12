@@ -265,6 +265,23 @@ cmd_change() {
       esac
       pset vless-ws cdn_addr "$val"
       ;;
+    obfs)
+      [ "$id" = hysteria2 ] || { txn_abort; die "$(t change_usage)"; }
+      case "$val" in
+        on | auto) pset hysteria2 obfs_password "$(rand_str "$(rand_int 16 24)")" ;;
+        off) pset hysteria2 obfs_password "" ;;
+        *) txn_abort; die "$(t change_usage)" ;;
+      esac
+      ;;
+    path)
+      [ "$id" = vless-ws ] || { txn_abort; die "$(t change_usage)"; }
+      case "$val" in
+        auto) val="/$(rand_str "$(rand_int 8 16)")" ;;
+        /*) printf '%s' "$val" | grep -Eq '^/[A-Za-z0-9_/-]{1,64}$' || { txn_abort; die "$(t bad_path)"; } ;;
+        *) txn_abort; die "$(t bad_path)" ;;
+      esac
+      pset vless-ws path "$val"
+      ;;
     hop)
       [ "$id" = hysteria2 ] || { txn_abort; die "$(t change_usage)"; }
       hop_set "$val"
@@ -437,6 +454,8 @@ pbox $PBOX_VERSION
   pbox change <proto> port <n|auto>
   pbox change <proto> ext-port <n>
   pbox change hysteria2 hop <on|off|A-B>
+  pbox change hysteria2 obfs <on|off>
+  pbox change vless-ws path <auto|/xxx>
   pbox change vless-ws cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
   pbox change reality-vision sni <domain|auto>

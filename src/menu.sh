@@ -60,7 +60,7 @@ choose() {
 }
 
 menu_proto() {
-  local id="$1" n=0 k_port k_sni k_ext k_off k_hop k_cdn k_fix k_tmp
+  local id="$1" n=0 k_port k_sni k_ext k_off k_hop k_cdn k_fix k_tmp k_obfs k_path
   while :; do
     menu_header "$(pmeta "$id" title)"
     if ! proto_enabled "$id"; then
@@ -84,6 +84,15 @@ menu_proto() {
     if [ "$id" = vless-ws ]; then
       n=$((n + 1)) k_cdn=$n
       printf "$T_m_fmt" "$n" "$(t mp_cdn)" "${C_D}[$(pget vless-ws cdn_addr "$(t off)")] $(t mp_cdn_d)${C_0}"
+    fi
+    k_obfs="" k_path=""
+    if [ "$id" = hysteria2 ]; then
+      n=$((n + 1)) k_obfs=$n
+      printf "$T_m_fmt" "$n" "$(t mp_obfs)" "${C_D}[$(onoff "$([ -n "$(pget hysteria2 obfs_password)" ] && echo 1 || echo 0)")] $(t mp_obfs_d)${C_0}"
+    fi
+    if [ "$id" = vless-ws ]; then
+      n=$((n + 1)) k_path=$n
+      printf "$T_m_fmt" "$n" "$(t mp_path)" "${C_D}$(t mp_path_d)${C_0}"
     fi
     k_fix="" k_tmp=""
     if [ "$id" = vless-ws ]; then
@@ -112,6 +121,11 @@ menu_proto() {
         if [ -n "$k_sni" ] && [ "$REPLY" = "$k_sni" ]; then
           ask " $(t mp_ask_sni)" ""
           run cmd_change "$id" sni "${REPLY:-auto}"
+        elif [ -n "$k_obfs" ] && [ "$REPLY" = "$k_obfs" ]; then
+          if [ -n "$(pget hysteria2 obfs_password)" ]; then run cmd_change hysteria2 obfs off; else run cmd_change hysteria2 obfs on; fi
+        elif [ -n "$k_path" ] && [ "$REPLY" = "$k_path" ]; then
+          ask " $(t mp_ask_path)" "auto"
+          run cmd_change vless-ws path "$REPLY"
         elif [ -n "$k_fix" ] && [ "$REPLY" = "$k_fix" ]; then
           if [ -n "$(pget vless-ws fixed_host)" ] && confirm " $(t mp_fixed_off_q)" n; then
             run cmd_argo fixed off
