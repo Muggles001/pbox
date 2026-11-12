@@ -438,6 +438,7 @@ pbox $PBOX_VERSION
   pbox change <proto> ext-port <n>
   pbox change hysteria2 hop <on|off|A-B>
   pbox change vless-ws cdn <addr|off>
+  pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
   pbox change reality-vision sni <domain|auto>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]

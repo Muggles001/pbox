@@ -31,6 +31,7 @@ main() {
     set) cmd_set "$@" ;;
     sub) cmd_sub "$@" ;;
     warp) cmd_warp "$@" ;;
+    argo) cmd_argo "$@" ;;
     firewall) cmd_firewall ;;
     rollback) cmd_rollback ;;
     log) cmd_log "$@" ;;

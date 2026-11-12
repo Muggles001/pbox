@@ -20,6 +20,9 @@ node_each() {
     for u in $(users_list); do
       if declare -F "proto_${id//-/_}_hosts" >/dev/null; then pcall "$id" hosts; else node_hosts; fi | while IFS= read -r line; do
         label="${line%%|*}" host="${line#*|}"
+        # 第三段是可选的附加信息，协议模块通过 NODE_EXTRA 读取
+        NODE_EXTRA=""
+        case "$host" in *"|"*) NODE_EXTRA="${host#*|}" host="${host%%|*}" ;; esac
         name="$(pmeta "$id" short)-$label"
         [ -n "$region" ] && name="$region-$name"
         [ "$multi" = 1 ] && name="$name-$u"

@@ -40,6 +40,7 @@ argo_sync() {
   local h
   testing && return 0
   argo_wanted || return 0
+  [ "$(kv_get "$STATE/protocols/vless-ws.env" temp on)" = on ] || return 0
   h=$(argo_fetch_host) || return 1
   [ "$h" = "$(kv_get "$STATE/protocols/vless-ws.env" argo_host)" ] && return 0
   kv_set "$STATE/protocols/vless-ws.env" argo_host "$h"
@@ -48,34 +49,106 @@ argo_sync() {
   return 0
 }
 
+argo_svc_exists() { [ -f "/etc/systemd/system/$1.service" ] || [ -f "/etc/init.d/$1" ]; }
+
 # 按当前状态让隧道服务生效。每次改动生效后调用。
+# 临时隧道和固定隧道是两个独立的服务，可以同时运行，都把请求转给同一个本机入站。
 argo_apply() {
-  local port mp
+  local port mp f="$STATE/protocols/vless-ws.env"
   if testing; then
     # 测试里没有真的隧道，放一个示例域名让节点输出可以被检查
-    if argo_wanted && [ -z "$(kv_get "$STATE/protocols/vless-ws.env" argo_host)" ]; then
-      kv_set "$STATE/protocols/vless-ws.env" argo_host "example-test.trycloudflare.com"
+    if argo_wanted && [ -z "$(kv_get "$f" argo_host)" ]; then
+      kv_set "$f" argo_host "example-test.trycloudflare.com"
       nodes_write
     fi
     return 0
   fi
   if ! argo_wanted; then
-    [ -f /etc/systemd/system/pbox-argo.service ] || [ -f /etc/init.d/pbox-argo ] && svc_remove pbox-argo
+    argo_svc_exists pbox-argo && svc_remove pbox-argo
+    argo_svc_exists pbox-argo-fixed && svc_remove pbox-argo-fixed
     return 0
   fi
-  port=$(kv_get "$STATE/protocols/vless-ws.env" port)
-  mp=$(kv_get "$STATE/protocols/vless-ws.env" metrics_port)
-  # 用 HTTP/2 连 Cloudflare，不依赖 UDP 出站。
-  # 开机自启时由服务自己触发一次同步（放到后台，不阻塞启动）；域名变了节点才会跟着更新。
-  svc_write pbox-argo "$(argo_bin) tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:$port --metrics 127.0.0.1:$mp" 0 \
-    "ExecStartPost=+/bin/sh -c 'nohup $LIBDIR/pbox.sh argo-sync >/dev/null 2>&1 &'"
-  svc enable pbox-argo
-  if ! svc active pbox-argo; then
-    svc start pbox-argo
-  elif [ "${UNIT_CHANGED:-0}" = 1 ]; then
-    svc restart pbox-argo
+  port=$(kv_get "$f" port)
+  mp=$(kv_get "$f" metrics_port)
+  if [ -n "$(kv_get "$f" fixed_host)" ] && [ -f "$STATE/argo-fixed.env" ]; then
+    # 令牌放在只有 root 可读的文件里交给服务，不出现在命令行和服务文件中
+    svc_write pbox-argo-fixed "$(argo_bin) tunnel --no-autoupdate --protocol http2 run" 0 "EnvironmentFile=$STATE/argo-fixed.env"
+    svc enable pbox-argo-fixed
+    if ! svc active pbox-argo-fixed; then svc start pbox-argo-fixed; elif [ "${UNIT_CHANGED:-0}" = 1 ]; then svc restart pbox-argo-fixed; fi
+  else
+    argo_svc_exists pbox-argo-fixed && svc_remove pbox-argo-fixed
   fi
-  argo_sync
+  if [ "$(kv_get "$f" temp on)" = on ]; then
+    # 用 HTTP/2 连 Cloudflare，不依赖 UDP 出站。
+    # 开机自启时由服务自己触发一次同步（放到后台，不阻塞启动）；域名变了节点才会跟着更新。
+    svc_write pbox-argo "$(argo_bin) tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:$port --metrics 127.0.0.1:$mp" 0 \
+      "ExecStartPost=+/bin/sh -c 'nohup $LIBDIR/pbox.sh argo-sync >/dev/null 2>&1 &'"
+    svc enable pbox-argo
+    if ! svc active pbox-argo; then svc start pbox-argo; elif [ "${UNIT_CHANGED:-0}" = 1 ]; then svc restart pbox-argo; fi
+    argo_sync
+  else
+    argo_svc_exists pbox-argo && svc_remove pbox-argo
+  fi
+}
+
+argo_status() {
+  local f="$STATE/protocols/vless-ws.env"
+  [ -f "$f" ] || die "$(t argo_need_proto)"
+  if [ "$(kv_get "$f" temp on)" = on ]; then say "$(t argo_st_temp "$(kv_get "$f" argo_host -)")"; else say "$(t argo_st_temp_off)"; fi
+  if [ -n "$(kv_get "$f" fixed_host)" ]; then say "$(t argo_st_fixed "$(kv_get "$f" fixed_host)")"; else say "$(t argo_st_fixed_off)"; fi
+  say "$(t argo_st_port "$(kv_get "$f" port)")"
+}
+
+# pbox argo <status|fixed <域名>|fixed off|temp <on|off>>
+cmd_argo() {
+  local act="${1:-status}" val="${2:-}" tok
+  need_root
+  need_installed
+  if [ "$act" = status ]; then
+    argo_status
+    return 0
+  fi
+  [ -f "$STATE/protocols/vless-ws.env" ] || die "$(t argo_need_proto)"
+  edit_begin
+  case "$act" in
+    fixed)
+      if [ "$val" = off ]; then
+        [ "$(pget vless-ws temp on)" = on ] || { txn_abort; die "$(t argo_need_one)"; }
+        pset vless-ws fixed_host ""
+        rm -f "$CUR/argo-fixed.env"
+      else
+        if [ -z "$val" ]; then
+          say "$(t argo_fixed_intro "$(pget vless-ws port)")"
+          say ""
+          ask "$(t argo_ask_host)" "$(pget vless-ws fixed_host)"
+          val="$REPLY"
+        fi
+        valid_domain "$val" || { txn_abort; die "$(t bad_domain "$val")"; }
+        tok="${PBOX_ARGO_TOKEN:-}"
+        if [ -z "$tok" ]; then
+          [ "$ASSUME_YES" = 1 ] && { txn_abort; die "$(t argo_need_token)"; }
+          read_secret "$(t argo_ask_token)"
+          tok="$REPLY"
+        fi
+        printf '%s' "$tok" | grep -Eq '^[A-Za-z0-9_=-]{20,}$' || { txn_abort; die "$(t argo_bad_token)"; }
+        pset vless-ws fixed_host "$val"
+        (umask 077 && printf 'TUNNEL_TOKEN=%s\n' "$tok" >"$CUR/argo-fixed.env")
+      fi
+      ;;
+    temp)
+      case "$val" in
+        on) pset vless-ws temp on ;;
+        off)
+          [ -n "$(pget vless-ws fixed_host)" ] || { txn_abort; die "$(t argo_need_one)"; }
+          pset vless-ws temp off
+          ;;
+        *) txn_abort; die "$(t argo_usage)" ;;
+      esac
+      ;;
+    *) txn_abort; die "$(t argo_usage)" ;;
+  esac
+  edit_end
+  argo_status
 }
 
 # 网友常用的优选地址。它们都是托管在 Cloudflare 上的站点或有人维护的优选域名：
