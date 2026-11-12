@@ -58,6 +58,11 @@ cmd_restore() {
   detect_ips
   gset ip4 "$IP4"
   gset ip6 "$IP6"
+  # 给 IP 签的证书换了机器就不对了，退回自签
+  if tls_is_ip && [ "$(gget tls_domain)" != "$IP4" ]; then
+    gset tls_domain ""
+    note "$(t dom_ip_dropped)"
+  fi
   conflict_check
   run_user_create
   cores_ensure || { txn_abort; rm -rf "$tmp"; die "$(t dl_abort)"; }

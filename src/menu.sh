@@ -236,8 +236,9 @@ menu_domain() {
     menu_header "$(t mset_domain)"
     printf '  %s%s%s\n\n' "$C_D" "$(domain_status)" "$C_0"
     item 1 md_set md_set_d
-    item 2 md_renew md_renew_d
-    item 3 md_off md_off_d
+    item 2 md_ip md_ip_d
+    item 3 md_renew md_renew_d
+    item 4 md_off md_off_d
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -245,8 +246,9 @@ menu_domain() {
         ask " $(t dom_ask)" ""
         [ -n "$REPLY" ] && run cmd_domain set "$REPLY"
         ;;
-      2) run cmd_domain renew ;;
-      3) run cmd_domain off ;;
+      2) run cmd_domain set ip ;;
+      3) run cmd_domain renew ;;
+      4) run cmd_domain off ;;
       *) return 0 ;;
     esac
   done
