@@ -165,6 +165,7 @@ menu_settings() {
     printf "$T_m_fmt" 5 "$(t mset_upd)" "${C_D}[$(onoff "$(gget update_check 1)")]${C_0}"
     item 6 mset_fw mset_fw_d
     item 7 mset_lang mset_lang_d
+    printf "$T_m_fmt" 8 "$(t mset_warp)" "${C_D}[$(onoff "$([ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && echo 1 || echo 0)")] $(t mset_warp_d)${C_0}"
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -188,6 +189,32 @@ menu_settings() {
       7)
         cmd_lang >/dev/null
         ;;
+      8) menu_warp ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
+menu_warp() {
+  while :; do
+    menu_header "$(t mset_warp)"
+    printf '  %s' "$C_D"
+    (warp_status)
+    printf '%s\n' "$C_0"
+    item 1 mw_on mw_on_d
+    item 2 mw_domains mw_domains_d
+    item 3 mw_all mw_all_d
+    item 4 mw_off mw_off_d
+    item 0 m_back m_blank
+    choose
+    case "$REPLY" in
+      1) run cmd_warp on ;;
+      2)
+        ask " $(t mw_ask_domains)" "$(kv_get "$STATE/outbound.env" warp_domains "$WARP_DEFAULT_DOMAINS")"
+        run cmd_warp domains "$REPLY"
+        ;;
+      3) run cmd_warp all ;;
+      4) run cmd_warp off ;;
       *) return 0 ;;
     esac
   done

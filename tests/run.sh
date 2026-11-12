@@ -137,6 +137,15 @@ check "Clash 与 sing-box 订阅文件已生成" bash -c "test -s '$(E)/nodes/su
 check "未开启订阅时查看地址会提示" bash -c "! bash dist/pbox.sh sub show"
 check "项目路径不合法时被拒绝" bash -c "! PBOX_SUB_PROJECT='bad path' PBOX_SUB_WTOKEN=a PBOX_SUB_RTOKEN=b bash dist/pbox.sh sub setup"
 
+echo "WARP 出口"
+check "开启 WARP" pbox warp on --yes
+check "开启后基础配置仍是合法 JSON" json_ok "$(E)/generated/sing-box/00_base.json"
+check "默认按网站分流" grep -q '"domain_suffix": \["openai.com"' "$(E)/generated/sing-box/00_base.json"
+check "可以改分流的网站" bash -c "bash dist/pbox.sh warp domains example.com,example.org --yes && grep -q '\"example.com\", \"example.org\"' '$(E)/generated/sing-box/00_base.json'"
+check "非法域名被拒绝" bash -c "! bash dist/pbox.sh warp domains 'bad domain' --yes"
+check "切到全部网站" bash -c "bash dist/pbox.sh warp all --yes && grep -q '\"final\": \"warp\"' '$(E)/generated/sing-box/00_base.json' && python3 -m json.tool '$(E)/generated/sing-box/00_base.json'"
+check "关闭后配置里不再有 WARP" bash -c "bash dist/pbox.sh warp off --yes && ! grep -q warp '$(E)/generated/sing-box/00_base.json'"
+
 echo "端口跳跃"
 check "开启端口跳跃" pbox change hysteria2 hop 30000-30999 --yes
 check "链接里带上跳跃范围" grep -q ':443/?.*&mport=30000-30999#' "$(E)/nodes/links.txt"

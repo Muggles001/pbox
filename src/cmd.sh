@@ -430,6 +430,7 @@ pbox $PBOX_VERSION
   pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
   pbox sub [setup|show|push|off]
+  pbox warp [on|off|all|domains a.com,b.com|status]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE
   pbox update   pbox uninstall   pbox lang

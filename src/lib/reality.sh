@@ -1,7 +1,12 @@
 # 内置候选都是有大量正常访问的真实网站，这份名单公开不构成问题。
-# 这 11 个是 2026-11 在三种系统上实测全部通过筛选的。是否可用仍以本机实测为准；可用 /etc/pbox/reality-candidates.txt 整份替换（每行一个域名）。
+# 这 47 个都在 2026-11 实测通过过筛选（美国与日本的机房各测过一部分）。是否可用仍以本机实测为准；可用 /etc/pbox/reality-candidates.txt 整份替换（每行一个域名）。
 REALITY_CANDIDATES="www.cisco.com www.asus.com www.toyota.com www.bosch.com www.adobe.com www.mozilla.org
-www.python.org www.debian.org www.rakuten.co.jp www.yahoo.co.jp www.airbnb.com"
+www.python.org www.debian.org www.rakuten.co.jp www.yahoo.co.jp www.airbnb.com
+www.nikon.com www.ricoh.com www.sharp.com www.yamaha.com www.docomo.ne.jp www.softbank.jp www.boeing.com
+www.fedex.com www.ups.com www.walmart.com www.target.com www.nasa.gov www.kernel.org www.apache.org
+www.postgresql.org www.mysql.com go.dev www.php.net www.ruby-lang.org www.docker.com www.jetbrains.com
+www.atlassian.com www.dropbox.com www.wikipedia.org www.bbc.com www.nhk.or.jp www.nikkei.com www.ucla.edu
+www.utoronto.ca www.ubc.ca www.nus.edu.sg www.kth.se www.ti.com www.arm.com www.micron.com www.westerndigital.com"
 
 reality_candidates() {
   if [ -f "$ETC/reality-candidates.txt" ]; then

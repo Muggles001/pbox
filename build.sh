@@ -20,6 +20,7 @@ src/lib/conflict.sh
 src/lib/render.sh
 src/lib/firewall.sh
 src/lib/hop.sh
+src/lib/warp.sh
 src/lib/nodes.sh
 src/lib/sub.sh
 src/lib/doctor.sh

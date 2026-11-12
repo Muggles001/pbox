@@ -2,7 +2,7 @@
 PRIVATE_CIDRS='"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10", "fc00::/7", "fe80::/10", "::1/128"'
 
 core_render_base() {
-  local block
+  local rules extra block
   block=$(gget block_private 1)
   case "$1" in
     xray)
@@ -20,14 +20,19 @@ core_render_base() {
 EOF
       ;;
     singbox)
+      # 日志只记致命错误：error 级别会把每个连接失败的来源 IP 写进日志，与"不记录客户端地址"相违
+      rules=""
+      [ "$block" = 1 ] && rules='{"ip_is_private": true, "action": "reject"}'
+      extra=$(warp_rules_json)
+      [ -n "$extra" ] && rules="$rules${rules:+, }$extra"
       cat <<EOF
 {
-  "log": {"level": "error", "timestamp": true},
+  "log": {"level": "fatal", "timestamp": true},
   "outbounds": [
     {"type": "direct", "tag": "direct"}
-  ],
+  ],$(warp_endpoint_json)
   "route": {
-    "rules": [$([ "$block" = 1 ] && printf '{"ip_is_private": true, "action": "reject"}')]
+    "rules": [$rules]$(warp_final_json)
   }
 }
 EOF

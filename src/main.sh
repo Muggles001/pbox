@@ -30,6 +30,7 @@ main() {
     reset-keys) cmd_reset_keys ;;
     set) cmd_set "$@" ;;
     sub) cmd_sub "$@" ;;
+    warp) cmd_warp "$@" ;;
     firewall) cmd_firewall ;;
     rollback) cmd_rollback ;;
     log) cmd_log "$@" ;;
