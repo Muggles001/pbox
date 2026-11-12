@@ -116,7 +116,7 @@ selftest() {
   # 内核刚重启时可能还没准备好，所以最多试三次，而不是一次失败就判定节点坏了
   for _ in 1 2 3; do
     sleep 2
-    if curl -s -o "${SELFTEST_OUT:-/dev/null}" -m 10 -x "socks5h://127.0.0.1:$3" https://www.cloudflare.com/cdn-cgi/trace; then
+    if curl -s -o "${SELFTEST_OUT:-/dev/null}" -m 10 -x "socks5h://127.0.0.1:$3" "${SELFTEST_URL:-https://www.cloudflare.com/cdn-cgi/trace}"; then
       rc=0
       break
     fi

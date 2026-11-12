@@ -205,9 +205,11 @@ menu_warp() {
     item 2 mw_domains mw_domains_d
     item 3 mw_all mw_all_d
     item 4 mw_off mw_off_d
+    item 5 mw_test mw_test_d
     item 0 m_back m_blank
     choose
     case "$REPLY" in
+      5) run cmd_warp test ;;
       1) run cmd_warp on ;;
       2)
         ask " $(t mw_ask_domains)" "$(kv_get "$STATE/outbound.env" warp_domains "$WARP_DEFAULT_DOMAINS")"

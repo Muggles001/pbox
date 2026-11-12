@@ -106,7 +106,7 @@ warp_status() {
   fi
 }
 
-# pbox warp <on|off|all|domains [列表]|status>
+# pbox warp <on|off|all|domains [列表]|status|test>
 cmd_warp() {
   local act="${1:-status}" val="${2:-}" d
   if [ "$act" = status ]; then
@@ -114,6 +114,14 @@ cmd_warp() {
     need_installed
     warp_status
     return 0
+  fi
+  if [ "$act" = test ]; then
+    need_root
+    need_installed
+    detect_sys
+    warp_status
+    [ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && d_warp
+    return
   fi
   edit_begin
   case "$act" in
@@ -150,24 +158,55 @@ cmd_warp() {
   warp_status
 }
 
-# 体检：全部走 WARP 时，经由节点访问 Cloudflare 的探测页应当显示 warp=on
+# 验证 WARP 是否真的在起作用。办法是经由节点去取 Cloudflare 的探测页，页面里有一行 warp=on 或 warp=off。
+# 全部模式：取 Cloudflare 自己的探测页。
+# 按网站模式：很多网站本身就托管在 Cloudflare 上，同样带这个探测页，所以逐个去取分流名单里的网站，
+# 取到的那一个若显示 warp=on，就证明"这个网站确实走了 WARP"。
 d_warp() {
-  local id out
+  local id out d seen=""
   [ "$(kv_get "$STATE/outbound.env" warp off)" = on ] || return 0
-  if [ "$(kv_get "$STATE/outbound.env" warp_mode domains)" != all ]; then
-    ok "$(t d_warp_domains)"
-    return 0
-  fi
   id=$(protos_enabled | head -1)
   out=$(mktemp)
-  SELFTEST_OUT="$out" pcall "$id" selftest
-  if grep -Eq '^warp=(on|plus)' "$out"; then
-    rm -f "$out"
-    ok "$(t d_warp_ok)"
-  else
+  if [ "$(kv_get "$STATE/outbound.env" warp_mode domains)" = all ]; then
+    SELFTEST_OUT="$out" pcall "$id" selftest
+    if grep -Eq '^warp=(on|plus)' "$out"; then
+      ok "$(t d_warp_ok)"
+      warp_show_exit "$out"
+      rm -f "$out"
+      return 0
+    fi
     rm -f "$out"
     bad "$(t d_warp_bad)"
     hint "pbox warp off"
     return 1
   fi
+  for d in $(kv_get "$STATE/outbound.env" warp_domains "$WARP_DEFAULT_DOMAINS" | tr ',' ' '); do
+    : >"$out"
+    SELFTEST_URL="https://$d/cdn-cgi/trace" SELFTEST_OUT="$out" pcall "$id" selftest >/dev/null 2>&1
+    grep -q '^warp=' "$out" || continue
+    seen="$d"
+    break
+  done
+  if [ -z "$seen" ]; then
+    rm -f "$out"
+    note "$(t d_warp_unknown)"
+    return 0
+  fi
+  if grep -Eq '^warp=(on|plus)' "$out"; then
+    ok "$(t d_warp_site_ok "$seen")"
+    warp_show_exit "$out"
+    rm -f "$out"
+    return 0
+  fi
+  rm -f "$out"
+  bad "$(t d_warp_site_bad "$seen")"
+  return 1
+}
+
+# 把经由 WARP 看到的出口地区和服务器自己的地区并排显示，一眼能看出有没有换出口
+warp_show_exit() {
+  local loc
+  loc=$(sed -n 's/^loc=//p' "$1" | head -1)
+  [ -n "$loc" ] && hint "$(t d_warp_exit "$loc" "$(kv_get "$STATE/global.env" region -)")"
+  return 0
 }
