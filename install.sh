@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # 引导脚本：取回已发布的 pbox.sh，核对同一发布里公布的哈希，然后交给它完成安装。
-# 发布前请把 PBOX_REPO 改成实际的仓库（owner/name）。
 set -euo pipefail
 
-PBOX_REPO="${PBOX_REPO:-}"
-[ -n "$PBOX_REPO" ] || { echo "PBOX_REPO is not set: this build has no release location yet." >&2; exit 1; }
+PBOX_REPO="${PBOX_REPO:-Muggles001/pbox}"
 [ "$(id -u)" = 0 ] || { echo "Please run as root (sudo -i)." >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { echo "curl is required." >&2; exit 1; }
 

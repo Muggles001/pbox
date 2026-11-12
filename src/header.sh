@@ -2,8 +2,8 @@ set -o pipefail
 umask 027
 
 PBOX_VERSION="0.1.0"
-# 发布仓库（owner/name）。未发布前为空，此时不检查更新。
-PBOX_REPO="${PBOX_REPO:-}"
+# 发布仓库（owner/name）。检查更新和在线更新都从这里取。
+PBOX_REPO="${PBOX_REPO:-Muggles001/pbox}"
 
 # PBOX_ROOT 只用于测试：把所有路径挪到一个临时目录下。
 R="${PBOX_ROOT:-}"

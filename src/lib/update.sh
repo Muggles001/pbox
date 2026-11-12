@@ -7,6 +7,7 @@ update_latest_tag() { # [超时秒数]
 update_notice() {
   local cache="$LIBDIR/update.cache" now last tag
   [ -n "$PBOX_REPO" ] || return 0
+  testing && return 0
   [ "$(kv_get "$STATE/global.env" update_check 1)" = 1 ] || return 0
   now=$(date +%s)
   last=$(kv_get "$cache" time 0)

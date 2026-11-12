@@ -2,18 +2,30 @@
 
 一条命令，在自己的 VPS 上搭好代理节点。默认不需要域名、不需要做选择；想要更多时，进阶选项都在菜单里。全部代码明文开源。
 
-> **当前状态：可以用，尚未公开发布。** 安装、管理、卸载的全流程由自动化流水线在真实的 Ubuntu 虚拟机上反复验证；节点可用性在真实 VPS 上用 v2rayNG 和 FlClash 实测过。仓库目前是私有的，所以下面的在线安装命令暂时不可用，需要把 `dist/pbox.sh` 传到机器上运行。
+> **当前状态：可以用。** 安装、管理、卸载的全流程由自动化流水线在真实的 Ubuntu 虚拟机上反复验证；节点可用性在真实 VPS 上用 v2rayNG 和 FlClash 实测过。尚未充分验证的部分见[开发路线](docs/09-开发路线.md)。
 
 ## 上手
 
 1. 准备一台 VPS（Debian 12+、Ubuntu 22.04+ 或 Alpine），用 SSH 以 root 登录。
-2. 运行安装：
+2. 运行安装命令：
 
    ```bash
-   bash pbox.sh install
+   bash <(curl -fsSL https://raw.githubusercontent.com/Muggles001/pbox/main/install.sh)
    ```
 
 3. 一路回车。结束后把屏幕上的链接导入客户端，或开启订阅。
+
+不放心直接运行远程脚本？可以先下载、打开看一眼，再执行：
+
+```bash
+curl -fsSLO https://github.com/Muggles001/pbox/releases/latest/download/pbox.sh
+```
+
+```bash
+bash pbox.sh install
+```
+
+每个版本的发布页都附有 `pbox.sh.sha256`，安装命令会自动核对；手动下载时可以自己比对。
 
 之后随时输入 `pbox` 打开菜单。**连不上时先选"节点体检"**，它会真的经由每个节点访问一次外网，告诉你哪一环有问题。
 

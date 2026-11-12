@@ -1,0 +1,25 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: tag must match the version in the script
+        run: |
+          v=$(sed -n 's/^PBOX_VERSION="\(.*\)"/\1/p' src/header.sh)
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME does not match PBOX_VERSION $v"; exit 1; }
+      - name: build and test
+        run: |
+          ./build.sh
+          bash tests/run.sh
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/pbox.sh dist/pbox.sh.sha256 --title "$GITHUB_REF_NAME" --generate-notes
