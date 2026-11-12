@@ -395,7 +395,7 @@ i18n_en() {
   T_mh_net='Traffic'
   T_mh_net_since='since boot'
   T_dom_ask='Domain, e.g. a.example.com'
-  T_dom_nat='This machine only forwards selected ports, so the certificate authority cannot reach port 80 and this method cannot be used.'
+  T_dom_nat='This machine only forwards selected ports, so the certificate authority cannot reach port 80 and this method cannot be used. If the domain is on Cloudflare, use DNS validation instead: pbox domain set DOMAIN dns'
   T_dom_no_dns='%s has no DNS record yet. Add an A record pointing to %s and try again in a few minutes.'
   T_dom_wrong_dns='%s resolves to %s, not this machine (%s). Point it here; if the domain is on Cloudflare, turn off the proxy (orange cloud) for that record.'
   T_dom_80_busy='Port 80 is in use by %s. The certificate authority needs port 80 to issue and renew; stop that service first.'
