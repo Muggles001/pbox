@@ -1,7 +1,7 @@
 set -o pipefail
 umask 027
 
-PBOX_VERSION="0.8.1"
+PBOX_VERSION="0.9.0"
 # 发布仓库（owner/name）。检查更新和在线更新都从这里取。
 PBOX_REPO="${PBOX_REPO:-Muggles001/pbox}"
 
@@ -47,5 +47,5 @@ CLOUDFLARED_VERSION="2026.10.7"
 CLOUDFLARED_SHA256_amd64="1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872"
 CLOUDFLARED_SHA256_arm64="3df43aedc9ff291d1735b5cb576cb97e0b157488796db2e32b28aecabb445775"
 
-PROTO_ALL="reality-vision hysteria2 vless-ws tuic anytls trojan vless-wstls"
+PROTO_ALL="reality-vision hysteria2 vless-ws tuic anytls trojan vless-wstls reality-xhttp shadowtls ss2022"
 PRESET_RECOMMENDED="reality-vision hysteria2"

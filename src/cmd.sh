@@ -94,7 +94,10 @@ install_customize() {
     [ "$(pmeta "$id" behind)" = site ] && continue
     confirm "  $(t inst_enable_q "$(pmeta "$id" title)")" || continue
     picked="$picked $id"
-    case "$id" in reality-vision) k=PBOX_REALITY_PORT ;; hysteria2) k=PBOX_HY2_PORT ;; tuic) k=PBOX_TUIC_PORT ;; anytls) k=PBOX_ANYTLS_PORT ;; *) k="" ;; esac
+    case "$id" in
+      reality-vision) k=PBOX_REALITY_PORT ;; hysteria2) k=PBOX_HY2_PORT ;; tuic) k=PBOX_TUIC_PORT ;; anytls) k=PBOX_ANYTLS_PORT ;;
+      reality-xhttp) k=PBOX_XHTTP_PORT ;; shadowtls) k=PBOX_STLS_PORT ;; ss2022) k=PBOX_SS_PORT ;; *) k="" ;;
+    esac
     [ -n "$k" ] || continue
     ask "  $(t inst_port_q)" ""
     if [ -n "$REPLY" ]; then
@@ -242,6 +245,7 @@ cmd_add() {
   pcall "$id" secrets
   edit_end
   [ "$(pmeta "$id" link_insecure)" = 1 ] && [ "$DRY_RUN" != 1 ] && ! tls_real && note "$(t note_link_insecure "$(pmeta "$id" title)")"
+  [ -n "$(pmeta "$id" note)" ] && [ "$DRY_RUN" != 1 ] && note "$(t "$(pmeta "$id" note)")"
   return 0
 }
 
@@ -294,7 +298,7 @@ cmd_change() {
       esac
       ;;
     path)
-      case "$id" in vless-ws | vless-wstls) ;; *) txn_abort; die "$(t change_usage)" ;; esac
+      case "$id" in vless-ws | vless-wstls | reality-xhttp) ;; *) txn_abort; die "$(t change_usage)" ;; esac
       case "$val" in
         auto) val="/$(rand_str "$(rand_int 8 16)")" ;;
         /*) printf '%s' "$val" | grep -Eq '^/[A-Za-z0-9_/-]{1,64}$' || { txn_abort; die "$(t bad_path)"; } ;;
@@ -303,7 +307,7 @@ cmd_change() {
       pset "$id" path "$val"
       ;;
     fp)
-      case "$id" in reality-vision | vless-ws | trojan | vless-wstls) ;; *) txn_abort; die "$(t change_usage)" ;; esac
+      case "$id" in reality-vision | vless-ws | trojan | vless-wstls | reality-xhttp | shadowtls) ;; *) txn_abort; die "$(t change_usage)" ;; esac
       case " $FP_CHOICES " in *" $val "*) pset "$id" fp "$val" ;; *) txn_abort; die "$(t bad_fp "$FP_CHOICES")" ;; esac
       ;;
     edge-port)
@@ -328,7 +332,7 @@ cmd_change() {
       gset nat 1
       ;;
     sni)
-      [ "$id" = reality-vision ] || { txn_abort; die "$(t change_usage)"; }
+      case "$id" in reality-vision | reality-xhttp | shadowtls) ;; *) txn_abort; die "$(t change_usage)" ;; esac
       if [ "$val" = auto ]; then
         say "$(t reality_picking)"
         val=$(reality_pick) || { txn_abort; die "$(t reality_none)"; }
@@ -497,13 +501,13 @@ pbox $PBOX_VERSION
   pbox change <proto> ext-port <n>
   pbox change hysteria2 hop <on|off|A-B>
   pbox change hysteria2 obfs <on|off>
-  pbox change <vless-ws|vless-wstls> path <auto|/xxx>
+  pbox change <vless-ws|vless-wstls|reality-xhttp> path <auto|/xxx>
   pbox change tuic cc <bbr|cubic|new_reno>
   pbox change <vless-ws|vless-wstls> cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
-  pbox change reality-vision sni <domain|auto>
+  pbox change <reality-vision|reality-xhttp|shadowtls> sni <domain|auto>
   pbox change reality-vision keys
-  pbox change <reality-vision|vless-ws|trojan|vless-wstls> fp <chrome|firefox|safari|ios|android|edge|random>
+  pbox change <reality-vision|vless-ws|trojan|vless-wstls|reality-xhttp|shadowtls> fp <chrome|firefox|safari|ios|android|edge|random>
   pbox change vless-ws edge-port <443|2053|2083|2087|2096|8443>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]

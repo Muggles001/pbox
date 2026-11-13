@@ -106,11 +106,17 @@ random_port() { # <tcp|udp>
 }
 
 # pick_port <tcp|udp> <候选...>：取第一个空闲的候选，都被占用则随机。
+# 同一次计划里已经分给别的协议的端口也算占用，否则一起安装的几个协议会挑中同一个候选。
 pick_port() {
-  local l4="$1" p
+  local l4="$1" p id taken
   shift
   for p in "$@"; do
-    port_in_use "$l4" "$p" || { echo "$p"; return 0; }
+    port_in_use "$l4" "$p" && continue
+    taken=0
+    for id in $(protos_enabled); do
+      [ "$(pget "$id" port)" = "$p" ] && [ "$(pmeta "$id" l4)" = "$l4" ] && taken=1
+    done
+    [ $taken = 0 ] && { echo "$p"; return 0; }
   done
   random_port "$l4"
 }

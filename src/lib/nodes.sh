@@ -45,11 +45,12 @@ node_each() {
   done
 }
 
-_node_link() { pcall "$1" share_link "$2" "$3" "$4"; }
-_node_link_insecure() { pcall "$1" share_link "$2" "$3" "$4" insecure; }
-_node_sb() { pcall "$1" client_singbox "$2" "$3" "$4"; echo "@@"; }
-_node_mh() { pcall "$1" client_mihomo "$2" "$3" "$4"; }
-_node_name() { echo "$4"; }
+# 有的协议只有通用链接（no_link 相反：只在 Clash 和 sing-box 配置里），节点名单跟着配置走
+_node_link() { [ "$(pmeta "$1" no_link)" = 1 ] || pcall "$1" share_link "$2" "$3" "$4"; }
+_node_link_insecure() { [ "$(pmeta "$1" no_link)" = 1 ] || pcall "$1" share_link "$2" "$3" "$4" insecure; }
+_node_sb() { [ "$(pmeta "$1" link_only)" = 1 ] && return 0; pcall "$1" client_singbox "$2" "$3" "$4"; echo "@@"; }
+_node_mh() { [ "$(pmeta "$1" link_only)" = 1 ] || pcall "$1" client_mihomo "$2" "$3" "$4"; }
+_node_name() { [ "$(pmeta "$1" link_only)" = 1 ] || echo "$4"; }
 
 # 把节点片段包成完整的客户端配置。片段与外壳分开，是因为订阅要把几台机器的片段合到一起。
 # 出站片段里每个节点后面跟一行 @@，这里换成 JSON 数组元素之间的逗号。
@@ -137,6 +138,8 @@ nodes_show() {
     say ""
   fi
   [ "$(gget compact_nodes 0)" = 1 ] && say "  ${C_D}$(t nodes_compact_on)${C_0}"
+  proto_enabled shadowtls && say "  ${C_D}$(t note_stls_nolink)${C_0}"
+  proto_enabled reality-xhttp && say "  ${C_D}$(t note_xhttp_clients)${C_0}"
   say "  $(t nodes_qr)        pbox qr"
   say "  $(t nodes_files)   ${NODES#"$R"}/"
   proto_enabled hysteria2 && ! tls_real && say "  ${C_D}$(t nodes_pin_hint)${C_0}"

@@ -88,7 +88,7 @@ menu_proto() {
     fi
     n=0 k_port=- k_sni="" k_ext=""
     if [ "$(pmeta "$id" behind)" != site ]; then n=1 k_port=1; item $n mp_port mp_port_d; fi
-    if [ "$id" = reality-vision ]; then n=$((n + 1)) k_sni=$n; item $n mp_sni mp_sni_d; fi
+    case "$id" in reality-vision | reality-xhttp | shadowtls) n=$((n + 1)) k_sni=$n; item $n mp_sni mp_sni_d ;; esac
     if [ "$(gget nat 0)" = 1 ]; then n=$((n + 1)) k_ext=$n; item $n mp_ext mp_ext_d; fi
     k_cdn=""
     if [ "$id" = vless-ws ] || { [ "$id" = vless-wstls ] && [ -n "$(gget cdn_host)" ]; }; then
@@ -105,7 +105,7 @@ menu_proto() {
       n=$((n + 1)) k_obfs=$n
       printf "$T_m_fmt" "$n" "$(t mp_obfs)" "${C_D}[$(onoff "$([ -n "$(pget hysteria2 obfs_password)" ] && echo 1 || echo 0)")] $(t mp_obfs_d)${C_0}"
     fi
-    if [ "$id" = vless-ws ] || [ "$id" = vless-wstls ]; then
+    if [ "$id" = vless-ws ] || [ "$id" = vless-wstls ] || [ "$id" = reality-xhttp ]; then
       n=$((n + 1)) k_path=$n
       printf "$T_m_fmt" "$n" "$(t mp_path)" "${C_D}$(t mp_path_d)${C_0}"
     fi
@@ -121,7 +121,7 @@ menu_proto() {
       n=$((n + 1)) k_eport=$n
       printf "$T_m_fmt" "$n" "$(t mp_eport)" "${C_D}[$(vless_ws_eport)] $(t mp_eport_d)${C_0}"
     fi
-    if [ "$id" != hysteria2 ] && [ "$id" != tuic ] && [ "$id" != anytls ]; then
+    if [ "$id" != hysteria2 ] && [ "$id" != tuic ] && [ "$id" != anytls ] && [ "$id" != ss2022 ]; then
       n=$((n + 1)) k_fp=$n
       printf "$T_m_fmt" "$n" "$(t mp_fp)" "${C_D}[$(fp_of "$id")] $(t mp_fp_d)${C_0}"
     fi

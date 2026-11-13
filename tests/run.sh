@@ -415,6 +415,26 @@ check "设着子域名时不能关伪装站" bash -c "bash dist/pbox.sh del troj
 check "停用后分流和节点里都没有子域名" bash -c "bash dist/pbox.sh add vless-wstls --yes && bash dist/pbox.sh site cdn off --yes && ! grep -q 'c.example.com' '$(E)/generated/nginx/nginx.conf' && ! grep -q 'c.example.com' '$(E)/nodes/links.txt'"
 unset PBOX_TEST_DNS_A
 
+echo "Shadowsocks 2022、ShadowTLS、Reality-XHTTP"
+new_root
+check "一起安装" bash -c "PBOX_PROTOCOLS='reality-vision hysteria2 reality-xhttp shadowtls ss2022' bash dist/pbox.sh install --yes"
+check "一起安装时各自挑到不同的端口" bash -c "[ \$(sed -n 's/^port=//p' '$(E)/state/protocols/reality-xhttp.env') != \$(sed -n 's/^port=//p' '$(E)/state/protocols/shadowtls.env') ]"
+check "XHTTP 由 Xray 承载" bash -c "python3 -c 'import json,sys; i=json.load(open(sys.argv[1]))[\"inbounds\"][0]; s=i[\"streamSettings\"]; sys.exit(not (s[\"network\"]==\"xhttp\" and s[\"security\"]==\"reality\" and s[\"realitySettings\"][\"target\"].endswith(\":443\")))' '$(E)/generated/xray/10_reality-xhttp.json'"
+check "XHTTP 只有通用链接" bash -c "grep -q '^vless://.*type=xhttp.*#XHTTP-IPv4' '$(E)/nodes/links.txt' && ! grep -q XHTTP '$(E)/nodes/sing-box.json' && ! grep -q XHTTP '$(E)/nodes/mihomo.yaml'"
+check "ShadowTLS 只在 Clash 和 sing-box 配置里" bash -c "! grep -q ShadowTLS '$(E)/nodes/links.txt' && grep -q 'plugin: shadow-tls' '$(E)/nodes/mihomo.yaml' && grep -q '\"detour\": \"ShadowTLS-IPv4-tls\"' '$(E)/nodes/sing-box.json' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null"
+check "ShadowTLS 里面的 Shadowsocks 只听本机" bash -c "python3 -c 'import json,sys; a,b=json.load(open(sys.argv[1]))[\"inbounds\"]; sys.exit(not (a[\"detour\"]==b[\"tag\"] and b[\"listen\"]==\"127.0.0.1\" and a[\"version\"]==3))' '$(E)/generated/sing-box/10_shadowtls.json'"
+check "SS 链接带服务器密钥和用户密钥" bash -c "python3 -c 'import base64,sys
+l=[x for x in open(sys.argv[1]) if x.startswith(\"ss://\")][0]
+p=base64.b64decode(l[5:].split(\"@\")[0]).decode().split(\":\")
+sys.exit(not (p[0]==\"2022-blake3-aes-128-gcm\" and len(base64.b64decode(p[1]))==16 and len(base64.b64decode(p[2]))==16))' '$(E)/nodes/links.txt'"
+check "SS 的 TCP 和 UDP 都放行" bash -c "p=\$(sed -n 's/^port=//p' '$(E)/state/protocols/ss2022.env'); bash dist/pbox.sh nodes | grep -q \"\$p/tcp \$p/udp\""
+check "SS 不能和 UDP 协议用同一个端口" bash -c "bash dist/pbox.sh change hysteria2 port 50000 --yes && ! bash dist/pbox.sh change ss2022 port 50000 --yes"
+ss_before=$(grep '^ss://' "$(E)/nodes/links.txt" | head -1)
+check "重置用户后 SS 的用户密钥跟着变" bash -c "bash dist/pbox.sh user reset default --yes && [ \"\$(grep '^ss://' '$(E)/nodes/links.txt' | head -1)\" != '$ss_before' ]"
+check "SS 每个用户一个密钥" bash -c "bash dist/pbox.sh user add bob ss2022 --yes && python3 -c 'import json,sys; u=json.load(open(sys.argv[1]))[\"inbounds\"][0][\"users\"]; sys.exit(not (len(u)==2 and u[0][\"password\"]!=u[1][\"password\"]))' '$(E)/generated/sing-box/10_ss2022.json'"
+check "换 XHTTP 的伪装目标和路径" bash -c "bash dist/pbox.sh change reality-xhttp sni www.example.net --yes && bash dist/pbox.sh change reality-xhttp path /p1 --yes && grep -q '\"target\": \"www.example.net:443\"' '$(E)/generated/xray/10_reality-xhttp.json' && grep -q '\"path\": \"/p1\"' '$(E)/generated/xray/10_reality-xhttp.json'"
+check "换 ShadowTLS 的握手对象" bash -c "bash dist/pbox.sh change shadowtls sni www.example.net --yes && grep -q 'host: \"www.example.net\"' '$(E)/nodes/mihomo.yaml'"
+
 echo "VLESS 的自定义选项"
 new_root
 PBOX_PROTOCOLS="reality-vision vless-ws" pbox install --yes >/dev/null 2>&1

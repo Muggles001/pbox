@@ -42,6 +42,7 @@ ports_wanted() {
     for id in $(protos_enabled); do
       [ "$(pmeta "$id" local)" = 1 ] && continue
       echo "$(pget "$id" port)/$(pmeta "$id" l4)"
+      [ "$(pmeta "$id" udp_too)" = 1 ] && echo "$(pget "$id" port)/udp"
     done
     r=$(pget hysteria2 hop_range)
     [ -n "$r" ] && echo "${r%-*}:${r#*-}/udp"

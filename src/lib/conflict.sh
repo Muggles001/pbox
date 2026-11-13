@@ -1,6 +1,17 @@
 # 冲突引擎只看协议声明的属性和状态里的端口，不认识具体协议。
 # 规则编号对应 docs/03-冲突规则.md。阶段 1 实现 H1、H2、H4、H12。
 
+# 两个协议用到的传输层有没有重叠。Shadowsocks 在 TCP 之外还用同一端口的 UDP。
+l4_overlap() { # <协议A> <协议B>
+  local a b
+  a="$(pmeta "$1" l4)$([ "$(pmeta "$1" udp_too)" = 1 ] && echo " udp")"
+  b="$(pmeta "$2" l4)$([ "$(pmeta "$2" udp_too)" = 1 ] && echo " udp")"
+  case " $a " in *" ${b%% *} "*) return 0 ;; esac
+  case " $b " in *" ${a%% *} "*) return 0 ;; esac
+  case "$a $b" in *udp*udp*) return 0 ;; esac
+  return 1
+}
+
 # H1/H2：两个协议要用同一个传输层的同一个端口。
 conflict_resolve_port() { # <协议A> <协议B>
   local a="$1" b="$2" l4 port c
@@ -38,7 +49,7 @@ conflict_check() {
     for a in $(protos_enabled); do
       for b in $(protos_enabled); do
         [ "$a" \< "$b" ] || continue
-        if [ "$(pmeta "$a" l4)" = "$(pmeta "$b" l4)" ] && [ "$(pget "$a" port)" = "$(pget "$b" port)" ]; then
+        if l4_overlap "$a" "$b" && [ "$(pget "$a" port)" = "$(pget "$b" port)" ]; then
           conflict_resolve_port "$a" "$b"
           again=1
           break 2
