@@ -11,6 +11,17 @@ node_hosts() {
   if [ "$mode" != split ] && [ -n "$dom" ]; then echo "$(t label_dual)|$dom"; fi
 }
 
+# 精简节点列表：同一条路有优选节点时，不再列它的普通版本（"X-Pref" 取代 "X"）；
+# 有 Argo 固定隧道时，不再列临时隧道（Fixed 取代 Temp）。体检不经过这里，仍逐个测试。
+hosts_compact() {
+  [ "$(gget compact_nodes 0)" = 1 ] || { cat; return 0; }
+  awk -F'|' '{ line[NR] = $0; lab[NR] = $1; has[$1] = 1; if ($1 ~ /^Fixed/) fixed = 1 }
+    END { for (i = 1; i <= NR; i++) {
+      if (has[lab[i] "-Pref"]) continue
+      if (fixed && lab[i] ~ /^Temp/) continue
+      print line[i] } }'
+}
+
 # 逐个节点回调：node_each <函数>，回调参数为 <协议> <用户> <地址> <节点名>
 node_each() {
   local fn="$1" id u line label host name multi=0 region
@@ -20,7 +31,7 @@ node_each() {
   for id in $(protos_enabled); do
     for u in ${NODE_USER:-$(users_list)}; do
       user_has "$u" "$id" || continue
-      if declare -F "proto_${id//-/_}_hosts" >/dev/null; then pcall "$id" hosts; else node_hosts; fi | while IFS= read -r line; do
+      if declare -F "proto_${id//-/_}_hosts" >/dev/null; then pcall "$id" hosts; else node_hosts; fi | hosts_compact | while IFS= read -r line; do
         label="${line%%|*}" host="${line#*|}"
         # 第三段是可选的附加信息，协议模块通过 NODE_EXTRA 读取
         NODE_EXTRA=""
@@ -125,6 +136,7 @@ nodes_show() {
     node_each _node_link_insecure | grep 'insecure=1' | sed 's/^/  /'
     say ""
   fi
+  [ "$(gget compact_nodes 0)" = 1 ] && say "  ${C_D}$(t nodes_compact_on)${C_0}"
   say "  $(t nodes_qr)        pbox qr"
   say "  $(t nodes_files)   ${NODES#"$R"}/"
   proto_enabled hysteria2 && ! tls_real && say "  ${C_D}$(t nodes_pin_hint)${C_0}"

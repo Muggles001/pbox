@@ -403,6 +403,9 @@ cmd_set() {
     update-check)
       case "$val" in on) gset update_check 1 ;; off) gset update_check 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
       ;;
+    compact-nodes)
+      case "$val" in on) gset compact_nodes 1 ;; off) gset compact_nodes 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
+      ;;
     block-private)
       case "$val" in
         on) gset block_private 1 ;;
@@ -506,6 +509,7 @@ pbox $PBOX_VERSION
   pbox set addr-mode <split|merged|all> [domain]
   pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
+  pbox set compact-nodes <on|off>
   pbox user [list|add NAME [PROTOCOLS]|protocols NAME <LIST|all>|del NAME|show NAME|reset NAME]
   pbox sub [setup|show [NAME]|push|off]
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]

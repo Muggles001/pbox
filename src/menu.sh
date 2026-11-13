@@ -329,6 +329,7 @@ menu_settings() {
     printf "$T_m_fmt" 8 "$(t mset_warp)" "${C_D}[$(onoff "$([ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && echo 1 || echo 0)")] $(t mset_warp_d)${C_0}"
     printf "$T_m_fmt" 9 "$(t mset_bbr)" "${C_D}[$(onoff "$([ "$(bbr_cur)" = bbr ] && echo 1 || echo 0)")] $(t mset_bbr_d)${C_0}"
     printf "$T_m_fmt" d "$(t mset_domain)" "${C_D}[$(gget tls_domain -)] $(t mset_domain_d)${C_0}"
+    printf "$T_m_fmt" n "$(t mset_compact)" "${C_D}[$(onoff "$(gget compact_nodes 0)")] $(t mset_compact_d)${C_0}"
     item u m_uninstall m_uninstall_d
     item 0 m_back m_blank
     choose
@@ -360,6 +361,11 @@ menu_settings() {
         run cmd_bbr "$v"
         ;;
       d | D) menu_domain ;;
+      n | N)
+        v=on
+        [ "$(gget compact_nodes 0)" = 1 ] && v=off
+        run cmd_set compact-nodes "$v"
+        ;;
       u | U)
         echo
         (cmd_uninstall)

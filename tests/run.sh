@@ -409,6 +409,8 @@ check "多出经 CDN 的节点，直连节点不变" bash -c "
   [ \$(grep -c . '$(E)/nodes/links.txt') = \$(($links_before + 1)) ]"
 check "优选节点连优选地址，握手仍写子域名" bash -c "bash dist/pbox.sh change vless-wstls cdn www.visa.com.sg --yes && grep -q '^vless://.*@www.visa.com.sg:443?.*sni=c.example.com.*host=c.example.com.*#.*WS-CDN-Pref' '$(E)/nodes/links.txt' && grep -q '\"server_name\": \"c.example.com\"' '$(E)/nodes/sing-box.json' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null"
 check "优选地址可以是 IPv6" bash -c "bash dist/pbox.sh change vless-wstls cdn 2606:4700::1 --yes && grep -q '^vless://.*@\[2606:4700::1\]:443?' '$(E)/nodes/links.txt'"
+check "精简后只列优选节点，直连节点保留" bash -c "bash dist/pbox.sh set compact-nodes on --yes && grep -q 'WS-CDN-Pref\$' '$(E)/nodes/links.txt' && ! grep -q 'WS-CDN\$' '$(E)/nodes/links.txt' && grep -q 'WS-TLS\$' '$(E)/nodes/links.txt' && ! grep -q 'WS-CDN\"' '$(E)/nodes/sing-box.json' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null"
+check "关掉精简后恢复" bash -c "bash dist/pbox.sh set compact-nodes off --yes && grep -q 'WS-CDN\$' '$(E)/nodes/links.txt'"
 check "设着子域名时不能关伪装站" bash -c "bash dist/pbox.sh del trojan --yes && bash dist/pbox.sh del vless-wstls --yes && ! bash dist/pbox.sh site off --yes"
 check "停用后分流和节点里都没有子域名" bash -c "bash dist/pbox.sh add vless-wstls --yes && bash dist/pbox.sh site cdn off --yes && ! grep -q 'c.example.com' '$(E)/generated/nginx/nginx.conf' && ! grep -q 'c.example.com' '$(E)/nodes/links.txt'"
 unset PBOX_TEST_DNS_A
@@ -421,6 +423,7 @@ check "不认识的握手特征被拒绝" bash -c "! bash dist/pbox.sh change re
 old_pbk=$(sed -n 's/^public_key=//p' "$(E)/state/protocols/reality-vision.env")
 u_before=$(sed -n 's/^uuid=//p' "$(E)/state/users/default.env")
 check "只换 Reality 的密钥，不动用户凭据" bash -c "bash dist/pbox.sh change reality-vision keys --yes && ! grep -qx 'public_key=$old_pbk' '$(E)/state/protocols/reality-vision.env' && grep -qx 'uuid=$u_before' '$(E)/state/users/default.env'"
+check "精简时 Argo 有优选就只列优选" bash -c "bash dist/pbox.sh change vless-ws cdn www.visa.com.sg --yes && bash dist/pbox.sh set compact-nodes on --yes && grep -q 'Argo-Temp-Pref\$' '$(E)/nodes/links.txt' && ! grep -q 'Argo-Temp\$' '$(E)/nodes/links.txt' && bash dist/pbox.sh set compact-nodes off --yes && bash dist/pbox.sh change vless-ws cdn off --yes"
 check "Argo 节点换连接端口" bash -c "bash dist/pbox.sh change vless-ws edge-port 2053 --yes && grep -q '^vless://.*:2053?.*type=ws' '$(E)/nodes/links.txt' && grep -q '\"server_port\": 2053' '$(E)/nodes/sing-box.json'"
 check "Cloudflare 不支持的端口被拒绝" bash -c "! bash dist/pbox.sh change vless-ws edge-port 8080 --yes"
 check "握手特征对不相关的协议不可用" bash -c "! bash dist/pbox.sh change hysteria2 fp firefox --yes"
