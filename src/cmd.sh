@@ -269,13 +269,17 @@ cmd_change() {
       pset "$id" port "$val"
       ;;
     cdn)
-      # 优选地址：客户端改连这个地址，再由 Cloudflare 送回自己的隧道
-      [ "$id" = vless-ws ] || { txn_abort; die "$(t change_usage)"; }
+      # 优选地址：客户端改连这个地址，再由 Cloudflare 送回自己的隧道或机器
+      case "$id" in
+        vless-ws) ;;
+        vless-wstls) [ -n "$(gget cdn_host)" ] || { txn_abort; die "$(t cdn_pref_need_host)"; } ;;
+        *) txn_abort; die "$(t change_usage)" ;;
+      esac
       case "$val" in
         off | auto | none) val="" ;;
         *) valid_domain "$val" || printf '%s' "$val" | grep -Eq '^[0-9a-fA-F:.]+$' || { txn_abort; die "$(t bad_domain "$val")"; } ;;
       esac
-      pset vless-ws cdn_addr "$val"
+      pset "$id" cdn_addr "$val"
       ;;
     cc)
       [ "$id" = tuic ] || { txn_abort; die "$(t change_usage)"; }
@@ -492,7 +496,7 @@ pbox $PBOX_VERSION
   pbox change hysteria2 obfs <on|off>
   pbox change <vless-ws|vless-wstls> path <auto|/xxx>
   pbox change tuic cc <bbr|cubic|new_reno>
-  pbox change vless-ws cdn <addr|off>
+  pbox change <vless-ws|vless-wstls> cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
   pbox change reality-vision sni <domain|auto>
   pbox change reality-vision keys
@@ -508,7 +512,7 @@ pbox $PBOX_VERSION
   pbox warp [on|off|all|domains a.com,b.com|status|test]
   pbox bbr [on|off|status]
   pbox domain [status|set DOMAIN [dns]|set ip|off|renew]
-  pbox site [status|on|off|source <builtin|https://URL>]
+  pbox site [status|on|off|source <builtin|https://URL>|cdn <SUBDOMAIN|off>]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE
   pbox update   pbox uninstall   pbox lang

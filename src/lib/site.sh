@@ -5,6 +5,8 @@
 #   其余的（包括 Reality 的伪装目标、不认识的域名、不带域名的）→ Reality 入站，行为与没有分流时相同。
 # Reality 没有启用或不在 443 上时，其余的连接由网站那一侧拒绝握手。
 # 自己域名这一路上还能挂两个协议：Trojan 排在网站前面，VLESS-WS-TLS 是网站上的一个路径。
+# 另有一个可选的"套 CDN 的子域名"：它在 Cloudflare 上打开了代理，Cloudflare 回源时
+# 握手里写的是这个子域名，Nginx 把它交给网站（不经过 Trojan），WS 路径因此也能经 CDN 访问。
 #
 # Nginx 用发行版的软件包，但只用它的程序：配置是脚本自己的一份，服务也是自己的，
 # 不读取也不修改 /etc/nginx 下的任何东西。机器上原有的网站因此不受影响。
@@ -81,8 +83,8 @@ nginx_validate() { # <配置目录>
 site_source() { gget site_source builtin; }
 
 nginx_render() {
-  local dom sp own rp mod certs="${CERTS#"$R"}" var="${VARDIR#"$R"}" log="${LOGDIR#"$R"}"
-  dom=$(gget tls_domain) sp=$(gget site_port)
+  local dom sp own rp mod cdn certs="${CERTS#"$R"}" var="${VARDIR#"$R"}" log="${LOGDIR#"$R"}"
+  dom=$(gget tls_domain) sp=$(gget site_port) cdn=$(gget cdn_host)
   # 开了 Trojan 时，自己域名的连接先交给它，密码不对的再由它转给网站
   own=$sp
   proto_enabled trojan && own=$(pget trojan port)
@@ -98,6 +100,7 @@ stream {
   map \$ssl_preread_server_name \$pbox_up {
     $dom 127.0.0.1:$own;
 EOF
+  [ -n "$cdn" ] && echo "    $cdn 127.0.0.1:$sp;"
   if front_on reality-vision; then
     rp=$(gget site_front_port)
     echo "    default 127.0.0.1:$rp;"
@@ -150,8 +153,11 @@ EOF
   cat <<EOF
   server {
     listen 127.0.0.1:$sp ssl http2;
-    server_name $dom;
+    server_name $dom${cdn:+ $cdn};
 EOF
+  # 子域名的证书续期时，签发方的访问可能被 Cloudflare 改成走 HTTPS 送到这里，
+  # 转给续期时临时监听 80 端口的 acme.sh
+  [ -n "$cdn" ] && echo "    location ^~ /.well-known/acme-challenge/ { proxy_pass http://127.0.0.1:80; }"
   site_locations
   echo "  }"
   # Trojan 把密码不对的连接解密后转到这里，所以这一份不加密
@@ -274,6 +280,7 @@ site_disable() {
   for id in $(protos_enabled); do
     [ "$(pmeta "$id" behind)" = site ] && die "$(t site_in_use "$(pmeta "$id" title)")"
   done
+  [ -n "$(gget cdn_host)" ] && die "$(t site_cdn_in_use)"
   edit_begin
   gset site off
   edit_end
@@ -302,6 +309,7 @@ site_set_source() { # <builtin|https://网址>
 site_status() {
   if site_on_p; then
     say "$(t site_status_on "$(gget tls_domain)" "$(site_source)")"
+    [ -n "$(gget cdn_host)" ] && say "$(t cdn_status "$(gget cdn_host)")"
   else
     say "$(t site_not_on)"
   fi
@@ -323,12 +331,103 @@ d_site() {
   esac
 }
 
-# pbox site [status|on|off|source <builtin|https://网址>]
+# 这个名字是否已经在 Cloudflare 的代理后面。Cloudflare 的边缘对任何打开了代理的名字
+# 都会回应这个路径，与回源是否正常无关。用不加密的 HTTP：二级以下的子域名不在
+# Cloudflare 免费证书的范围内，HTTPS 反而会失败；这里只读一段公开信息，不传任何数据。
+cf_proxied() {
+  testing && { [ "${PBOX_TEST_CF:-0}" = 1 ]; return; }
+  curl -sL --max-time 10 "http://$1/cdn-cgi/trace" 2>/dev/null | grep -qx "h=$1"
+}
+
+# 套 CDN 的子域名。它和直连用的域名分开：打开代理后这个名字解析到 Cloudflare，
+# 直连协议用它会连不上。证书重签一次，同时写上两个名字，Cloudflare 的"完全（严格）"模式才能通过。
+site_cdn_set() { # <子域名>
+  local h="${1:-}" proxied=0 ip4 ip6 owner method
+  need_root
+  need_installed
+  detect_sys
+  site_on_p || die "$(t cdn_need_site)"
+  h=$(printf '%s' "$h" | tr 'A-Z' 'a-z')
+  valid_domain "$h" || die "$(t bad_domain "$h")"
+  [ "$h" = "$(gget tls_domain)" ] && die "$(t cdn_same_domain)"
+  [ "$h" = "$(gget cdn_host)" ] && { say "$(t cdn_already "$h")"; return 0; }
+  method=$(gget tls_method http)
+  ip4=$(gget ip4) ip6=$(gget ip6)
+  if cf_proxied "$h"; then
+    proxied=1
+  elif ! { [ -n "$ip4" ] && resolve A "$h" | grep -qxF "$ip4"; } && ! { [ -n "$ip6" ] && resolve AAAA "$h" | grep -qxF "$ip6"; }; then
+    die "$(t cdn_no_dns "$h" "${ip4:-$ip6}")"
+  fi
+  if [ "$method" != dns ] && ! testing && port_in_use tcp 80; then
+    owner=$(port_owner tcp 80)
+    die "$(t dom_80_busy "${owner:-?}")"
+  fi
+  head1 "$(t cdn_plan_title)"
+  say "$(t cdn_plan "$h" "$(gget tls_domain)")"
+  say ""
+  confirm "$(t dom_plan_q)" || die "$(t cancelled)"
+  if ! domain_issue "$(gget tls_domain)" "$method" "$h" "" force; then
+    if [ "$method" != dns ] && [ $proxied = 1 ]; then die "$(t cdn_issue_fail_proxied "$LOGDIR/acme.log")"; fi
+    die "$(t dom_issue_fail "$LOGDIR/acme.log")"
+  fi
+  domain_install_cert "$(gget tls_domain)" || die "$(t dom_issue_fail "$LOGDIR/acme.log")"
+  edit_begin
+  gset cdn_host "$h"
+  edit_end
+  say "${C_G}$(t cdn_done "$h")${C_0}"
+  [ $proxied = 1 ] || note "$(t cdn_turn_on "$h")"
+  note "$(t cdn_ssl_mode)"
+}
+
+# 关掉后证书重签成只有主域名，否则续期时还会去验证那个可能已经删掉的子域名
+site_cdn_off() {
+  local core
+  need_root
+  need_installed
+  detect_sys
+  [ -n "$(gget cdn_host)" ] || { say "$(t cdn_not_set)"; return 0; }
+  edit_begin
+  gset cdn_host ""
+  edit_end
+  if domain_issue "$(gget tls_domain)" "$(gget tls_method http)" "" "" force && domain_install_cert "$(gget tls_domain)"; then
+    testing || for core in $(cores_needed); do svc restart "$(core_svc "$core")"; done
+  else
+    warn "$(t cdn_off_reissue_fail "$LOGDIR/acme.log")"
+  fi
+  say "$(t cdn_off_done)"
+}
+
+# 体检：经 Cloudflare 真实访问一次子域名。回源失败时 Cloudflare 返回 52x
+d_cdn() {
+  local h code
+  h=$(gget cdn_host)
+  [ -n "$h" ] || return 0
+  if ! cf_proxied "$h"; then
+    bad "$(t d_cdn_not_proxied "$h")"
+    return 1
+  fi
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$h/" 2>/dev/null)
+  case "$code" in
+    2?? | 3??) ok "$(t d_cdn_ok "$h")" ;;
+    52?)
+      bad "$(t d_cdn_origin "$h" "$code")"
+      hint "$(t cdn_ssl_mode)"
+      return 1
+      ;;
+    *)
+      bad "$(t d_cdn_bad "$h" "${code:-000}")"
+      return 1
+      ;;
+  esac
+}
+
+# pbox site [status|on|off|source <builtin|https://网址>|cdn <子域名|off>]
 cmd_site() {
   case "${1:-status}" in
     on) site_enable ;;
     off) site_disable ;;
     source) site_set_source "${2:-}" ;;
+    cdn) if [ "${2:-}" = off ]; then site_cdn_off; else site_cdn_set "${2:-}"; fi ;;
     status) need_root; need_installed; site_status ;;
     *) cmd_help ;;
   esac

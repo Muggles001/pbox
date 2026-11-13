@@ -384,6 +384,35 @@ check "Reality 不在 443 时仍放行 443" bash -c "bash dist/pbox.sh change re
 check "都停用后可以关伪装站" bash -c "bash dist/pbox.sh del vless-wstls --yes && bash dist/pbox.sh site off --yes"
 unset PBOX_TEST_DNS_A
 
+echo "自有域名套 CDN 与优选"
+new_root
+PBOX_PROTOCOLS="reality-vision hysteria2" pbox install --yes >/dev/null 2>&1
+export PBOX_TEST_DNS_A=203.0.113.10
+pbox domain set w.example.com --yes >/dev/null 2>&1
+check "没开伪装站时不能设" bash -c "! bash dist/pbox.sh site cdn c.example.com --yes"
+pbox site on --yes >/dev/null 2>&1
+pbox add vless-wstls --yes >/dev/null 2>&1
+pbox add trojan --yes >/dev/null 2>&1
+check "不能用直连的域名" bash -c "! bash dist/pbox.sh site cdn w.example.com --yes"
+check "没解析也不在 Cloudflare 后面时拒绝" bash -c "! PBOX_TEST_DNS_A= bash dist/pbox.sh site cdn c.example.com --yes && ! grep -q '^cdn_host=c' '$(E)/state/global.env'"
+check "没设子域名时不能设优选" bash -c "! bash dist/pbox.sh change vless-wstls cdn www.visa.com.sg --yes"
+links_before=$(grep -c . "$(E)/nodes/links.txt")
+check "设置子域名" pbox site cdn c.example.com --yes
+check "子域名交给网站而不是 Trojan，网站认这个名字" bash -c "
+  sp=\$(sed -n 's/^site_port=//p' '$(E)/state/global.env')
+  grep -q \"c.example.com 127.0.0.1:\$sp;\" '$(E)/generated/nginx/nginx.conf' &&
+  grep -q 'server_name w.example.com c.example.com;' '$(E)/generated/nginx/nginx.conf' &&
+  grep -q 'location ^~ /.well-known/acme-challenge/ { proxy_pass http://127.0.0.1:80; }' '$(E)/generated/nginx/nginx.conf'"
+check "多出经 CDN 的节点，直连节点不变" bash -c "
+  grep -q '^vless://.*@c.example.com:443?.*sni=c.example.com.*host=c.example.com.*#.*WS-CDN' '$(E)/nodes/links.txt' &&
+  grep -q '^vless://.*@w.example.com:443?.*sni=w.example.com.*#.*WS-TLS' '$(E)/nodes/links.txt' &&
+  [ \$(grep -c . '$(E)/nodes/links.txt') = \$(($links_before + 1)) ]"
+check "优选节点连优选地址，握手仍写子域名" bash -c "bash dist/pbox.sh change vless-wstls cdn www.visa.com.sg --yes && grep -q '^vless://.*@www.visa.com.sg:443?.*sni=c.example.com.*host=c.example.com.*#.*WS-CDN-Pref' '$(E)/nodes/links.txt' && grep -q '\"server_name\": \"c.example.com\"' '$(E)/nodes/sing-box.json' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null"
+check "优选地址可以是 IPv6" bash -c "bash dist/pbox.sh change vless-wstls cdn 2606:4700::1 --yes && grep -q '^vless://.*@\[2606:4700::1\]:443?' '$(E)/nodes/links.txt'"
+check "设着子域名时不能关伪装站" bash -c "bash dist/pbox.sh del trojan --yes && bash dist/pbox.sh del vless-wstls --yes && ! bash dist/pbox.sh site off --yes"
+check "停用后分流和节点里都没有子域名" bash -c "bash dist/pbox.sh add vless-wstls --yes && bash dist/pbox.sh site cdn off --yes && ! grep -q 'c.example.com' '$(E)/generated/nginx/nginx.conf' && ! grep -q 'c.example.com' '$(E)/nodes/links.txt'"
+unset PBOX_TEST_DNS_A
+
 echo "VLESS 的自定义选项"
 new_root
 PBOX_PROTOCOLS="reality-vision vless-ws" pbox install --yes >/dev/null 2>&1

@@ -91,9 +91,9 @@ menu_proto() {
     if [ "$id" = reality-vision ]; then n=$((n + 1)) k_sni=$n; item $n mp_sni mp_sni_d; fi
     if [ "$(gget nat 0)" = 1 ]; then n=$((n + 1)) k_ext=$n; item $n mp_ext mp_ext_d; fi
     k_cdn=""
-    if [ "$id" = vless-ws ]; then
+    if [ "$id" = vless-ws ] || { [ "$id" = vless-wstls ] && [ -n "$(gget cdn_host)" ]; }; then
       n=$((n + 1)) k_cdn=$n
-      printf "$T_m_fmt" "$n" "$(t mp_cdn)" "${C_D}[$(pget vless-ws cdn_addr "$(t off)")] $(t mp_cdn_d)${C_0}"
+      printf "$T_m_fmt" "$n" "$(t mp_cdn)" "${C_D}[$(pget "$id" cdn_addr "$(t off)")] $(t mp_cdn_d)${C_0}"
     fi
     k_cc=""
     if [ "$id" = tuic ]; then
@@ -174,7 +174,7 @@ menu_proto() {
         elif [ -n "$k_keys" ] && [ "$REPLY" = "$k_keys" ]; then
           confirm " $(t mp_keys_q)" n && run cmd_change reality-vision keys
         elif [ -n "$k_cdn" ] && [ "$REPLY" = "$k_cdn" ]; then
-          menu_cdn
+          menu_cdn "$id"
         elif [ -n "$k_hop" ] && [ "$REPLY" = "$k_hop" ]; then
           ask " $(t mp_ask_hop)" "on"
           run cmd_change "$id" hop "$REPLY"
@@ -188,7 +188,7 @@ menu_proto() {
 }
 
 menu_cdn() {
-  local n c pick
+  local id="$1" n c pick
   menu_header "$(t mp_cdn)"
   say " $(t cdn_intro)"
   say ""
@@ -205,17 +205,17 @@ menu_cdn() {
     0 | "" | q) return 0 ;;
     8)
       ask " $(t cdn_ask)" ""
-      [ -n "$REPLY" ] && run cmd_change vless-ws cdn "$REPLY"
+      [ -n "$REPLY" ] && run cmd_change "$id" cdn "$REPLY"
       return 0
       ;;
-    9) run cmd_change vless-ws cdn off; return 0 ;;
+    9) run cmd_change "$id" cdn off; return 0 ;;
   esac
   n=0 pick=""
   for c in $ARGO_CDN_CHOICES; do
     n=$((n + 1))
     [ "$REPLY" = "$n" ] && pick="$c"
   done
-  [ -n "$pick" ] && run cmd_change vless-ws cdn "$pick"
+  [ -n "$pick" ] && run cmd_change "$id" cdn "$pick"
 }
 
 menu_protocols() {
@@ -281,6 +281,7 @@ menu_domain() {
     item 5 md_off md_off_d
     printf "$T_m_fmt" 6 "$(t md_site)" "${C_D}[$(onoff "$(site_on_p && echo 1 || echo 0)")] $(t md_site_d)${C_0}"
     printf "$T_m_fmt" 7 "$(t md_source)" "${C_D}[$(site_source)] $(t md_source_d)${C_0}"
+    printf "$T_m_fmt" 8 "$(t md_cdn)" "${C_D}[$(gget cdn_host "$(t off)")] $(t md_cdn_d)${C_0}"
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -299,6 +300,15 @@ menu_domain() {
       7)
         ask " $(t site_ask_source)" "builtin"
         run cmd_site source "$REPLY"
+        ;;
+      8)
+        if [ -n "$(gget cdn_host)" ]; then
+          confirm " $(t cdn_off_q)" n && run cmd_site cdn off
+        else
+          say " $(t cdn_intro_host)"
+          ask " $(t cdn_ask_host)" ""
+          [ -n "$REPLY" ] && run cmd_site cdn "$REPLY"
+        fi
         ;;
       *) return 0 ;;
     esac

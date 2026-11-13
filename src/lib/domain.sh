@@ -162,8 +162,43 @@ domain_precheck() { # <域名> [dns]
   return 0
 }
 
+# 向签发方申请证书。第三个参数非空时，证书同时写上这个名字（套 CDN 的子域名）。
+# 令牌为空时 acme.sh 用它上次保存的那个。force 用于名字变了但证书还没到续期时间的情况。
+domain_issue() { # <域名> <http|dns> [附加名字] [令牌] [force]
+  local dom="$1" method="$2" alt="${3:-}" tok="${4:-}" log="$LOGDIR/acme.log" be rc extra=""
+  testing && return 0
+  [ -n "$alt" ] && extra="-d $alt"
+  [ "${5:-}" = force ] && extra="$extra --force"
+  is_ip4 "$dom" && extra="$extra --certificate-profile shortlived"
+  mkdir -p "$LOGDIR"
+  if [ "$method" = dns ]; then
+    acme_ensure || die "$(t dl_abort)"
+    acme_ensure_dns || die "$(t dl_abort)"
+    say "$(t dom_issuing_dns)"
+    # shellcheck disable=SC2086
+    CF_Token="$tok" acme --issue --dns dns_cf -d "$dom" $extra --server "$(acme_server)" --keylength ec-256 --log "$log" >/dev/null 2>&1
+    rc=$?
+    chmod 600 "$ACME_CONF/account.conf" 2>/dev/null
+  else
+    if ! has socat; then
+      say "$(t deps_missing " socat")"
+      pkg_install socat >/dev/null || die "$(t deps_fail " socat")"
+    fi
+    acme_ensure || die "$(t dl_abort)"
+    be=$(fw_backend)
+    [ -n "$be" ] && { fw_is_open "$be" 80/tcp || fw_open "$be" 80/tcp; }
+    say "$(t dom_issuing)"
+    # shellcheck disable=SC2086
+    acme --issue --standalone -d "$dom" $extra --server "$(acme_server)" --keylength ec-256 --log "$log" >/dev/null 2>&1
+    rc=$?
+  fi
+  [ $rc = 0 ] && return 0
+  # 不强制重签时，已经签过且尚未到期 acme.sh 返回"跳过"，这不算失败
+  [ "${5:-}" != force ] && [ -f "$ACME_CONF/${dom}_ecc/fullchain.cer" ]
+}
+
 domain_set() { # <域名|ip> [dns]
-  local dom="${1:-}" method="${2:-http}" be log old prof="" tok="" rc
+  local dom="${1:-}" method="${2:-http}" old tok=""
   need_root
   need_installed
   detect_sys
@@ -182,7 +217,6 @@ domain_set() { # <域名|ip> [dns]
   domain_precheck "$dom" "$method"
   head1 "$(t dom_plan_title)"
   if is_ip4 "$dom"; then
-    prof="--certificate-profile shortlived"
     say "$(t dom_plan_ip "$dom")"
   elif [ "$method" = dns ]; then
     say "$(t dom_plan_dns "$dom")"
@@ -205,31 +239,10 @@ domain_set() { # <域名|ip> [dns]
     # 先确认令牌本身有效，免得等到申请失败才发现
     fetch --max-time 15 -H "Authorization: Bearer $tok" https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null |
       grep -q '"success": *true' || die "$(t dom_token_bad)"
-    acme_ensure || die "$(t dl_abort)"
-    acme_ensure_dns || die "$(t dl_abort)"
-    say "$(t dom_issuing_dns)"
-    log="$LOGDIR/acme.log"
-    mkdir -p "$LOGDIR"
-    CF_Token="$tok" acme --issue --dns dns_cf -d "$dom" --server "$(acme_server)" --keylength ec-256 --log "$log" >/dev/null 2>&1
-    rc=$?
-    chmod 600 "$ACME_CONF/account.conf" 2>/dev/null
-    if [ $rc != 0 ] && [ ! -f "$ACME_CONF/${dom}_ecc/fullchain.cer" ]; then die "$(t dom_issue_fail_dns "$log")"; fi
-  elif ! testing; then
-    if ! has socat; then
-      say "$(t deps_missing " socat")"
-      pkg_install socat >/dev/null || die "$(t deps_fail " socat")"
-    fi
-    acme_ensure || die "$(t dl_abort)"
-    be=$(fw_backend)
-    [ -n "$be" ] && { fw_is_open "$be" 80/tcp || fw_open "$be" 80/tcp; }
-    say "$(t dom_issuing)"
-    log="$LOGDIR/acme.log"
-    mkdir -p "$LOGDIR"
-    # shellcheck disable=SC2086
-    if ! acme --issue --standalone -d "$dom" --server "$(acme_server)" --keylength ec-256 $prof --log "$log" >/dev/null 2>&1; then
-      # 已经签过且尚未到期时 acme.sh 返回"跳过"，这不算失败
-      [ -f "$ACME_CONF/${dom}_ecc/fullchain.cer" ] || die "$(t dom_issue_fail "$log")"
-    fi
+  fi
+  # 套 CDN 的子域名跟着主域名走：换主域名时新证书里也带上它
+  if ! domain_issue "$dom" "$method" "$(gget cdn_host)" "$tok"; then
+    if [ "$method" = dns ]; then die "$(t dom_issue_fail_dns "$LOGDIR/acme.log")"; else die "$(t dom_issue_fail "$LOGDIR/acme.log")"; fi
   fi
   domain_install_cert "$dom" || die "$(t dom_issue_fail "$LOGDIR/acme.log")"
   old=$(gget tls_domain)
