@@ -38,13 +38,16 @@ fw_close() {
 
 ports_wanted() {
   local id r
-  for id in $(protos_enabled); do
-    [ "$(pmeta "$id" local)" = 1 ] && continue
-    echo "$(pget "$id" port)/$(pmeta "$id" l4)"
-  done
-  r=$(pget hysteria2 hop_range)
-  [ -n "$r" ] && echo "${r%-*}:${r#*-}/udp"
-  return 0
+  {
+    for id in $(protos_enabled); do
+      [ "$(pmeta "$id" local)" = 1 ] && continue
+      echo "$(pget "$id" port)/$(pmeta "$id" l4)"
+    done
+    r=$(pget hysteria2 hop_range)
+    [ -n "$r" ] && echo "${r%-*}:${r#*-}/udp"
+    # 分流开着时 443 由 Nginx 监听，不论 Reality 在不在 443
+    site_on_p && echo 443/tcp
+  } | awk '!seen[$0]++'
 }
 
 # 放行当前需要的端口（先询问），并撤销 pbox 以前放行、现在不再使用的端口。

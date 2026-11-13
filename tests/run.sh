@@ -351,6 +351,39 @@ check "关闭后 Nginx 配置消失" bash -c "bash dist/pbox.sh site off --yes &
 check "同域名的 TCP 协议占着 443 时拒绝" bash -c "bash dist/pbox.sh change anytls port 443 --yes && ! bash dist/pbox.sh site on --yes"
 unset PBOX_TEST_DNS_A
 
+echo "伪装站上的 Trojan 与 VLESS-WS-TLS"
+new_root
+check "安装时不能直接选" bash -c "! PBOX_PROTOCOLS='reality-vision trojan' bash dist/pbox.sh install --yes && ! test -e '$(E)/state'"
+PBOX_PROTOCOLS="reality-vision hysteria2" pbox install --yes >/dev/null 2>&1
+export PBOX_TEST_DNS_A=203.0.113.10
+pbox domain set w.example.com --yes >/dev/null 2>&1
+check "没开伪装站时不能加" bash -c "! bash dist/pbox.sh add trojan --yes && ! test -e '$(E)/state/protocols/trojan.env'"
+pbox site on --yes >/dev/null 2>&1
+check "加 Trojan" pbox add trojan --yes
+check "自己域名的连接先给 Trojan，密码不对的转给不加密的网站入口" bash -c "
+  tp=\$(sed -n 's/^port=//p' '$(E)/state/protocols/trojan.env'); pp=\$(sed -n 's/^site_plain_port=//p' '$(E)/state/global.env')
+  grep -q \"w.example.com 127.0.0.1:\$tp;\" '$(E)/generated/nginx/nginx.conf' &&
+  grep -q \"listen 127.0.0.1:\$pp;\" '$(E)/generated/nginx/nginx.conf' &&
+  grep -q \"\\\"fallback\\\": {\\\"server\\\": \\\"127.0.0.1\\\", \\\"server_port\\\": \$pp}\" '$(E)/generated/sing-box/'*_trojan.json"
+check "转给网站的连接排在私网拦截之前放行" bash -c "
+  pp=\$(sed -n 's/^site_plain_port=//p' '$(E)/state/global.env')
+  python3 -c 'import json,sys; r=json.load(open(sys.argv[1]))[\"route\"][\"rules\"]; sys.exit(not (r[0].get(\"inbound\")==[\"trojan\"] and r[0][\"port\"]==[int(sys.argv[2])] and r[0][\"outbound\"]==\"direct\" and r[1].get(\"ip_is_private\")))' '$(E)/generated/sing-box/00_base.json' \"\$pp\""
+check "Trojan 链接用域名和 443，不带证书指纹" bash -c "grep -q '^trojan://.*@w.example.com:443?security=tls&sni=w.example.com' '$(E)/nodes/links.txt' && ! grep '^trojan://' '$(E)/nodes/links.txt' | grep -q 'insecure\|203.0.113'"
+check "加 VLESS-WS-TLS" pbox add vless-wstls --yes
+check "隐蔽路径在加密和不加密两个入口上都转给内核" bash -c "
+  p=\$(sed -n 's/^path=//p' '$(E)/state/protocols/vless-wstls.env'); wp=\$(sed -n 's/^port=//p' '$(E)/state/protocols/vless-wstls.env')
+  [ \"\$(grep -c \"location = \$p {\" '$(E)/generated/nginx/nginx.conf')\" = 2 ] &&
+  [ \"\$(grep -c \"proxy_pass http://127.0.0.1:\$wp;\" '$(E)/generated/nginx/nginx.conf')\" = 2 ]"
+check "VLESS-WS-TLS 链接只报 HTTP/1.1" bash -c "grep -q '^vless://.*@w.example.com:443?.*security=tls.*alpn=http%2F1.1&type=ws&host=w.example.com' '$(E)/nodes/links.txt'"
+check "客户端配置有效" bash -c "python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null && grep -q 'type: trojan' '$(E)/nodes/mihomo.yaml'"
+check "换路径后网站配置跟着变" bash -c "bash dist/pbox.sh change vless-wstls path /abc123 --yes && grep -q 'location = /abc123 {' '$(E)/generated/nginx/nginx.conf'"
+check "换握手特征" bash -c "bash dist/pbox.sh change trojan fp safari --yes && grep -q '^trojan://.*fp=safari' '$(E)/nodes/links.txt'"
+check "协议挂在上面时不能关伪装站" bash -c "! bash dist/pbox.sh site off --yes && grep -q '^site=on' '$(E)/state/global.env'"
+check "停用 Trojan 后域名回到网站" bash -c "bash dist/pbox.sh del trojan --yes && grep -q \"w.example.com 127.0.0.1:\$(sed -n 's/^site_port=//p' '$(E)/state/global.env');\" '$(E)/generated/nginx/nginx.conf' && ! grep -q \"listen 127.0.0.1:\$(sed -n 's/^site_plain_port=//p' '$(E)/state/global.env');\" '$(E)/generated/nginx/nginx.conf'"
+check "Reality 不在 443 时仍放行 443" bash -c "bash dist/pbox.sh change reality-vision port 8444 --yes && bash dist/pbox.sh nodes | grep -q '443/tcp'"
+check "都停用后可以关伪装站" bash -c "bash dist/pbox.sh del vless-wstls --yes && bash dist/pbox.sh site off --yes"
+unset PBOX_TEST_DNS_A
+
 echo "VLESS 的自定义选项"
 new_root
 PBOX_PROTOCOLS="reality-vision vless-ws" pbox install --yes >/dev/null 2>&1

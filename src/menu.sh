@@ -66,20 +66,28 @@ menu_proto() {
   while :; do
     menu_header "$(pmeta "$id" title)"
     if ! proto_enabled "$id"; then
+      if [ "$(pmeta "$id" behind)" = site ] && ! site_on_p; then
+        printf '  %s%s%s\n\n' "$C_D" "$(t mp_need_site)" "$C_0"
+      fi
       item 1 mp_enable mp_enable_d
       item 0 m_back m_blank
       choose
       case "$REPLY" in
         1)
-          ask " $(t mp_ask_port)" ""
-          run cmd_add "$id" "${REPLY:-auto}"
+          # 分流后面的协议对外固定是 443，内部端口自动选
+          if [ "$(pmeta "$id" behind)" = site ]; then
+            run cmd_add "$id" auto
+          else
+            ask " $(t mp_ask_port)" ""
+            run cmd_add "$id" "${REPLY:-auto}"
+          fi
           ;;
         *) return 0 ;;
       esac
       continue
     fi
-    n=1 k_port=1 k_sni="" k_ext=""
-    item $n mp_port mp_port_d
+    n=0 k_port=- k_sni="" k_ext=""
+    if [ "$(pmeta "$id" behind)" != site ]; then n=1 k_port=1; item $n mp_port mp_port_d; fi
     if [ "$id" = reality-vision ]; then n=$((n + 1)) k_sni=$n; item $n mp_sni mp_sni_d; fi
     if [ "$(gget nat 0)" = 1 ]; then n=$((n + 1)) k_ext=$n; item $n mp_ext mp_ext_d; fi
     k_cdn=""
@@ -97,7 +105,7 @@ menu_proto() {
       n=$((n + 1)) k_obfs=$n
       printf "$T_m_fmt" "$n" "$(t mp_obfs)" "${C_D}[$(onoff "$([ -n "$(pget hysteria2 obfs_password)" ] && echo 1 || echo 0)")] $(t mp_obfs_d)${C_0}"
     fi
-    if [ "$id" = vless-ws ]; then
+    if [ "$id" = vless-ws ] || [ "$id" = vless-wstls ]; then
       n=$((n + 1)) k_path=$n
       printf "$T_m_fmt" "$n" "$(t mp_path)" "${C_D}$(t mp_path_d)${C_0}"
     fi
@@ -113,7 +121,7 @@ menu_proto() {
       n=$((n + 1)) k_eport=$n
       printf "$T_m_fmt" "$n" "$(t mp_eport)" "${C_D}[$(vless_ws_eport)] $(t mp_eport_d)${C_0}"
     fi
-    if [ "$id" = reality-vision ] || [ "$id" = vless-ws ]; then
+    if [ "$id" != hysteria2 ] && [ "$id" != tuic ] && [ "$id" != anytls ]; then
       n=$((n + 1)) k_fp=$n
       printf "$T_m_fmt" "$n" "$(t mp_fp)" "${C_D}[$(fp_of "$id")] $(t mp_fp_d)${C_0}"
     fi
@@ -148,7 +156,7 @@ menu_proto() {
           if [ -n "$(pget hysteria2 obfs_password)" ]; then run cmd_change hysteria2 obfs off; else run cmd_change hysteria2 obfs on; fi
         elif [ -n "$k_path" ] && [ "$REPLY" = "$k_path" ]; then
           ask " $(t mp_ask_path)" "auto"
-          run cmd_change vless-ws path "$REPLY"
+          run cmd_change "$id" path "$REPLY"
         elif [ -n "$k_fix" ] && [ "$REPLY" = "$k_fix" ]; then
           if [ -n "$(pget vless-ws fixed_host)" ] && confirm " $(t mp_fixed_off_q)" n; then
             run cmd_argo fixed off
@@ -218,7 +226,7 @@ menu_protocols() {
     for id in $PROTO_ALL; do
       n=$((n + 1))
       if proto_enabled "$id"; then
-        printf '  %s  %s●%s %-22s %s %s\n' "$n" "$C_G" "$C_0" "$(pmeta "$id" title)" "$(pmeta "$id" l4 | tr a-z A-Z)" "$(pget "$id" port)"
+        printf '  %s  %s●%s %-22s %s %s\n' "$n" "$C_G" "$C_0" "$(pmeta "$id" title)" "$(pmeta "$id" l4 | tr a-z A-Z)" "$([ "$(pmeta "$id" behind)" = site ] && echo 443 || pget "$id" port)"
       else
         printf '  %s  %s○ %-22s %s%s\n' "$n" "$C_D" "$(pmeta "$id" title)" "$(t mp_off)" "$C_0"
       fi

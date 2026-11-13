@@ -4,6 +4,7 @@
 #   握手里是自己的域名 → Nginx 自己的网站（用域名证书），浏览器访问域名看到的是一个正常网页；
 #   其余的（包括 Reality 的伪装目标、不认识的域名、不带域名的）→ Reality 入站，行为与没有分流时相同。
 # Reality 没有启用或不在 443 上时，其余的连接由网站那一侧拒绝握手。
+# 自己域名这一路上还能挂两个协议：Trojan 排在网站前面，VLESS-WS-TLS 是网站上的一个路径。
 #
 # Nginx 用发行版的软件包，但只用它的程序：配置是脚本自己的一份，服务也是自己的，
 # 不读取也不修改 /etc/nginx 下的任何东西。机器上原有的网站因此不受影响。
@@ -80,8 +81,11 @@ nginx_validate() { # <配置目录>
 site_source() { gget site_source builtin; }
 
 nginx_render() {
-  local dom sp rp mod src host certs="${CERTS#"$R"}" var="${VARDIR#"$R"}" log="${LOGDIR#"$R"}" site="${SITE_DIR#"$R"}"
-  dom=$(gget tls_domain) sp=$(gget site_port) src=$(site_source)
+  local dom sp own rp mod certs="${CERTS#"$R"}" var="${VARDIR#"$R"}" log="${LOGDIR#"$R"}"
+  dom=$(gget tls_domain) sp=$(gget site_port)
+  # 开了 Trojan 时，自己域名的连接先交给它，密码不对的再由它转给网站
+  own=$sp
+  proto_enabled trojan && own=$(pget trojan port)
   mod=$(nginx_stream_mod)
   [ -n "$mod" ] && echo "load_module $mod;"
   cat <<EOF
@@ -92,7 +96,7 @@ events { worker_connections 1024; }
 
 stream {
   map \$ssl_preread_server_name \$pbox_up {
-    $dom 127.0.0.1:$sp;
+    $dom 127.0.0.1:$own;
 EOF
   if front_on reality-vision; then
     rp=$(gget site_front_port)
@@ -148,6 +152,37 @@ EOF
     listen 127.0.0.1:$sp ssl http2;
     server_name $dom;
 EOF
+  site_locations
+  echo "  }"
+  # Trojan 把密码不对的连接解密后转到这里，所以这一份不加密
+  if proto_enabled trojan; then
+    echo "  server {"
+    echo "    listen 127.0.0.1:$(gget site_plain_port);"
+    site_locations
+    echo "  }"
+  fi
+  echo "}"
+}
+
+# 网站本身，以及 VLESS-WS-TLS 的隐蔽路径。加密和不加密的两个入口共用这一份。
+site_locations() {
+  local src host site="${SITE_DIR#"$R"}"
+  src=$(site_source)
+  if proto_enabled vless-wstls; then
+    # 路径对但不是 WebSocket 的请求（比如浏览器直接打开）按不存在的页面处理
+    cat <<EOF
+    location = $(pget vless-wstls path) {
+      if (\$http_upgrade != "websocket") { return 404; }
+      proxy_pass http://127.0.0.1:$(pget vless-wstls port);
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade \$http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host \$host;
+      proxy_read_timeout 1d;
+      proxy_send_timeout 1d;
+    }
+EOF
+  fi
   if [ "$src" = builtin ]; then
     cat <<EOF
     root $site;
@@ -165,10 +200,6 @@ EOF
     }
 EOF
   fi
-  cat <<EOF
-  }
-}
-EOF
 }
 
 # 内置页面只是后备：所有装了本脚本的机器如果都摆同一个页面，页面本身就成了特征。
@@ -235,10 +266,14 @@ site_enable() {
 }
 
 site_disable() {
+  local id
   need_root
   need_installed
   detect_sys
   site_on_p || { say "$(t site_not_on)"; return 0; }
+  for id in $(protos_enabled); do
+    [ "$(pmeta "$id" behind)" = site ] && die "$(t site_in_use "$(pmeta "$id" title)")"
+  done
   edit_begin
   gset site off
   edit_end

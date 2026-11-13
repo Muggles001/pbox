@@ -90,6 +90,8 @@ install_customize() {
   ask "$(t inst_mode)" ""
   case "$REPLY" in c | C) ;; *) return 0 ;; esac
   for id in $PROTO_ALL; do
+    # 这些协议要先有域名和伪装站，装好之后再开
+    [ "$(pmeta "$id" behind)" = site ] && continue
     confirm "  $(t inst_enable_q "$(pmeta "$id" title)")" || continue
     picked="$picked $id"
     case "$id" in reality-vision) k=PBOX_REALITY_PORT ;; hysteria2) k=PBOX_HY2_PORT ;; tuic) k=PBOX_TUIC_PORT ;; anytls) k=PBOX_ANYTLS_PORT ;; *) k="" ;; esac
@@ -137,6 +139,7 @@ cmd_install() {
   PLAN_NOTES=""
   for id in $protos; do
     proto_known "$id" || { txn_abort; die "$(t c_unknown "$id")"; }
+    [ "$(pmeta "$id" behind)" = site ] && { txn_abort; die "$(t proto_need_site "$(pmeta "$id" title)")"; }
     : >"$CUR/protocols/$id.env"
     pcall "$id" plan || { txn_abort; die "$(t no_port)"; }
   done
@@ -226,6 +229,7 @@ cmd_add() {
   proto_known "$id" || die "$(t c_unknown "$id") ($PROTO_ALL)"
   edit_begin
   proto_enabled "$id" && { txn_abort; die "$(t add_exists "$id")"; }
+  if [ "$(pmeta "$id" behind)" = site ] && ! site_on_p; then txn_abort; die "$(t proto_need_site "$(pmeta "$id" title)")"; fi
   : >"$CUR/protocols/$id.env"
   PLAN_NOTES=""
   pcall "$id" plan || { txn_abort; die "$(t no_port)"; }
@@ -286,16 +290,16 @@ cmd_change() {
       esac
       ;;
     path)
-      [ "$id" = vless-ws ] || { txn_abort; die "$(t change_usage)"; }
+      case "$id" in vless-ws | vless-wstls) ;; *) txn_abort; die "$(t change_usage)" ;; esac
       case "$val" in
         auto) val="/$(rand_str "$(rand_int 8 16)")" ;;
         /*) printf '%s' "$val" | grep -Eq '^/[A-Za-z0-9_/-]{1,64}$' || { txn_abort; die "$(t bad_path)"; } ;;
         *) txn_abort; die "$(t bad_path)" ;;
       esac
-      pset vless-ws path "$val"
+      pset "$id" path "$val"
       ;;
     fp)
-      case "$id" in reality-vision | vless-ws) ;; *) txn_abort; die "$(t change_usage)" ;; esac
+      case "$id" in reality-vision | vless-ws | trojan | vless-wstls) ;; *) txn_abort; die "$(t change_usage)" ;; esac
       case " $FP_CHOICES " in *" $val "*) pset "$id" fp "$val" ;; *) txn_abort; die "$(t bad_fp "$FP_CHOICES")" ;; esac
       ;;
     edge-port)
@@ -486,13 +490,13 @@ pbox $PBOX_VERSION
   pbox change <proto> ext-port <n>
   pbox change hysteria2 hop <on|off|A-B>
   pbox change hysteria2 obfs <on|off>
-  pbox change vless-ws path <auto|/xxx>
+  pbox change <vless-ws|vless-wstls> path <auto|/xxx>
   pbox change tuic cc <bbr|cubic|new_reno>
   pbox change vless-ws cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
   pbox change reality-vision sni <domain|auto>
   pbox change reality-vision keys
-  pbox change <reality-vision|vless-ws> fp <chrome|firefox|safari|ios|android|edge|random>
+  pbox change <reality-vision|vless-ws|trojan|vless-wstls> fp <chrome|firefox|safari|ios|android|edge|random>
   pbox change vless-ws edge-port <443|2053|2083|2087|2096|8443>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]

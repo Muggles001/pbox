@@ -61,8 +61,10 @@ FP_CHOICES="chrome firefox safari ios android edge random"
 fp_of() { pget "$1" fp chrome; }
 
 # 写进节点信息的端口。NAT 机器上监听的是内网端口，客户端要连的是商家转发出来的外网端口。
+# 挂在 443 分流后面的协议，对外永远是 443。
 pubport() {
   local e
+  [ "$(pmeta "$1" behind)" = site ] && { printf 443; return 0; }
   e=$(pget "$1" ext_port)
   printf '%s' "${e:-$(pget "$1" port)}"
 }

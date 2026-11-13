@@ -22,7 +22,11 @@ EOF
     singbox)
       # 日志只记致命错误：error 级别会把每个连接失败的来源 IP 写进日志，与"不记录客户端地址"相违
       rules=""
-      [ "$block" = 1 ] && rules='{"ip_is_private": true, "action": "reject"}'
+      # Trojan 把密码不对的连接转给本机的伪装站，这条连接也要过路由：
+      # 排在最前，免得被下面的私网拦截或 WARP 规则带走
+      proto_enabled trojan &&
+        rules="{\"inbound\": [\"trojan\"], \"ip_cidr\": [\"127.0.0.1/32\"], \"port\": [$(gget site_plain_port)], \"action\": \"route\", \"outbound\": \"direct\"}"
+      [ "$block" = 1 ] && rules="$rules${rules:+, }{\"ip_is_private\": true, \"action\": \"reject\"}"
       extra=$(warp_rules_json)
       [ -n "$extra" ] && rules="$rules${rules:+, }$extra"
       cat <<EOF
