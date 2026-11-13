@@ -155,8 +155,8 @@ EOF
     listen 127.0.0.1:$sp ssl http2;
     server_name $dom${cdn:+ $cdn};
 EOF
-  # 子域名的证书续期时，签发方的访问可能被 Cloudflare 改成走 HTTPS 送到这里，
-  # 转给续期时临时监听 80 端口的 acme.sh
+  # Cloudflare 的"始终使用 HTTPS"不跳转验证路径，但用户自己的跳转规则可能会，
+  # 那时签发方的访问经 HTTPS 送到这里，转给续期时临时监听 80 端口的 acme.sh
   [ -n "$cdn" ] && echo "    location ^~ /.well-known/acme-challenge/ { proxy_pass http://127.0.0.1:80; }"
   site_locations
   echo "  }"

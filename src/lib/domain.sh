@@ -285,8 +285,11 @@ domain_off() {
 }
 
 # 由定时器调用。证书没到续期时间时 acme.sh 返回 2，什么都不做。
-domain_renew() {
-  local dom core rc
+# force 不管到没到期都续一次，用来确认续期这条路真的走得通，不必等到期才发现问题。
+# 签发方会在约一个月内复用已通过的验证，不先作废的话强制续期根本不验证，什么也证明不了。
+domain_renew() { # [force]
+  local dom alt core rc extra=""
+  case "${1:-}" in '') ;; force) extra=--force ;; *) cmd_help; exit 1 ;; esac
   need_root
   dom=$(kv_get "$STATE/global.env" tls_domain)
   if [ -z "$dom" ]; then
@@ -295,7 +298,11 @@ domain_renew() {
   fi
   detect_sys
   lock_try || return 0
-  acme --renew -d "$dom" --ecc --server "$(acme_server)" --log "$LOGDIR/acme.log" >/dev/null 2>&1
+  if [ -n "$extra" ]; then
+    alt=$(kv_get "$STATE/global.env" cdn_host)
+    acme --deactivate -d "$dom" ${alt:+-d "$alt"} --server "$(acme_server)" --log "$LOGDIR/acme.log" >/dev/null 2>&1
+  fi
+  acme --renew -d "$dom" --ecc $extra --server "$(acme_server)" --log "$LOGDIR/acme.log" >/dev/null 2>&1
   rc=$?
   if [ $rc = 0 ]; then
     domain_install_cert "$dom"
@@ -347,12 +354,12 @@ d_domain() {
   fi
 }
 
-# pbox domain [status|set 域名 [dns]|set ip|off|renew]
+# pbox domain [status|set 域名 [dns]|set ip|off|renew [force]]
 cmd_domain() {
   case "${1:-status}" in
     set) domain_set "${2:-}" "${3:-}" ;;
     off) domain_off ;;
-    renew) domain_renew ;;
+    renew) domain_renew "${2:-}" ;;
     status) need_root; need_installed; domain_status ;;
     *) cmd_help ;;
   esac

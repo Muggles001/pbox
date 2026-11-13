@@ -519,7 +519,7 @@ pbox $PBOX_VERSION
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]
   pbox warp [on|off|all|domains a.com,b.com|status|test]
   pbox bbr [on|off|status]
-  pbox domain [status|set DOMAIN [dns]|set ip|off|renew]
+  pbox domain [status|set DOMAIN [dns]|set ip|off|renew [force]]
   pbox site [status|on|off|source <builtin|https://URL>|cdn <SUBDOMAIN|off>]
   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE

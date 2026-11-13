@@ -311,6 +311,7 @@ check "Reality 不受影响" bash -c "grep '^vless://' '$(E)/nodes/links.txt' | 
 check "客户端配置合法且不带指纹" bash -c "python3 -m json.tool '$(E)/nodes/sing-box.json' && ! grep -q certificate_public_key_sha256 '$(E)/nodes/sing-box.json' && ! grep -q 'fingerprint: \"' '$(E)/nodes/mihomo.yaml'"
 check "停用后回到自签证书和指纹固定" bash -c "bash dist/pbox.sh domain off --yes && grep -q 'certs/hysteria2.crt' '$(E)/generated/sing-box/'*hysteria2.json && grep -q pinSHA256 '$(E)/nodes/links.txt' && ! test -e '$(E)/certs/domain.crt'"
 unset PBOX_TEST_DNS_A
+check "续期只接受 force 一个选项" bash -c "! bash dist/pbox.sh domain renew now"
 check "没有域名时改用本机 IP" bash -c "bash dist/pbox.sh domain set ip --yes && grep -qx 'tls_domain=203.0.113.10' '$(E)/state/global.env'"
 check "IP 证书的链接按 IP 验证，不跳过验证" bash -c "grep -q '^tuic://.*sni=203.0.113.10' '$(E)/nodes/links.txt' && ! grep -Eq 'pinSHA256|insecure' '$(E)/nodes/links.txt' && python3 -m json.tool '$(E)/nodes/sing-box.json'"
 check "从 IP 换成域名" bash -c "PBOX_TEST_DNS_A=203.0.113.10 bash dist/pbox.sh domain set b.example.com --yes && grep -qx 'tls_domain=b.example.com' '$(E)/state/global.env'"
