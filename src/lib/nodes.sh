@@ -11,15 +11,46 @@ node_hosts() {
   if [ "$mode" != split ] && [ -n "$dom" ]; then echo "$(t label_dual)|$dom"; fi
 }
 
-# 精简节点列表：同一条路有优选节点时，不再列它的普通版本（"X-Pref" 取代 "X"）；
-# 有 Argo 固定隧道时，不再列临时隧道（Fixed 取代 Temp）。体检不经过这里，仍逐个测试。
+# 精简节点列表：只列推荐的协议，每个协议只列推荐的那一个节点。体检不经过这里，仍逐个测试。
+compact_on() { [ "$(gget compact_nodes 0)" = 1 ]; }
+
+# 每种用途挑一个，按次序取这个用户能用的第一个：TCP 主力、UDP 提速、IP 被封时经 Cloudflare 的兜底。
+# Shadowsocks、ShadowTLS、SOCKS5 偏中转落地或较冷门，不列；
+# 用户只有这些协议时照常列出，免得他的列表是空的
+compact_listed() { # <协议> <用户>
+  local role id rec=""
+  compact_on || return 0
+  for role in "reality-vision trojan anytls reality-xhttp" "hysteria2 tuic" "vless-wstls vless-ws"; do
+    for id in $role; do
+      proto_enabled "$id" && user_has "$2" "$id" || continue
+      # 没有套 CDN 的 VLESS-WS-TLS 是直连的，不算兜底
+      [ "$id" = vless-wstls ] && [ -z "$(gget cdn_host)" ] && continue
+      rec="$rec $id"
+      break
+    done
+  done
+  [ -n "$rec" ] || return 0
+  case " $rec " in *" $1 "*) return 0 ;; esac
+  return 1
+}
+
+# 同一个协议的几个节点里挑一个：经 Cloudflare 的优选 > 固定隧道 > 临时隧道；
+# 直连的经中转 > 域名 > IPv4 > IPv6。建了中转说明直连线路不好，所以中转优先
 hosts_compact() {
-  [ "$(gget compact_nodes 0)" = 1 ] || { cat; return 0; }
-  awk -F'|' '{ line[NR] = $0; lab[NR] = $1; has[$1] = 1; if ($1 ~ /^Fixed/) fixed = 1 }
-    END { for (i = 1; i <= NR; i++) {
-      if (has[lab[i] "-Pref"]) continue
-      if (fixed && lab[i] ~ /^Temp/) continue
-      print line[i] } }'
+  compact_on || { cat; return 0; }
+  awk -F'|' -v dual="$(t label_dual)" '
+    { l = $1
+      if (l == "CDN-Pref" || l == "Fixed-Pref") s = 1
+      else if (l == "CDN" || l == "Fixed") s = 2
+      else if (l == "Temp-Pref") s = 3
+      else if (l == "Temp") s = 4
+      else if (l ~ /^Via-/) s = 5
+      else if (l == dual) s = 6
+      else if (l == "IPv4") s = 7
+      else if (l == "IPv6") s = 8
+      else s = 9
+      if (!best || s < bs) { best = $0; bs = s } }
+    END { if (best != "") print best }'
 }
 
 # 逐个节点回调：node_each <函数>，回调参数为 <协议> <用户> <地址> <节点名>
@@ -31,6 +62,7 @@ node_each() {
   for id in $(protos_enabled); do
     for u in ${NODE_USER:-$(users_list)}; do
       user_has "$u" "$id" || continue
+      compact_listed "$id" "$u" || continue
       {
         if declare -F "proto_${id//-/_}_hosts" >/dev/null; then pcall "$id" hosts; else node_hosts; fi
         relay_via_hosts "$id"

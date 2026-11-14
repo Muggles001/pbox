@@ -26,6 +26,8 @@ EOF
       # 排在最前，免得被下面的私网拦截或 WARP 规则带走
       proto_enabled trojan &&
         rules="$rules${rules:+, }{\"inbound\": [\"trojan\"], \"ip_cidr\": [\"127.0.0.1/32\"], \"port\": [$(gget site_plain_port)], \"action\": \"route\", \"outbound\": \"direct\"}"
+      extra=$(socks_allow_rule)
+      [ -n "$extra" ] && rules="$extra${rules:+, }$rules"
       [ "$block" = 1 ] && rules="$rules${rules:+, }{\"ip_is_private\": true, \"action\": \"reject\"}"
       extra=$(warp_rules_json)
       [ -n "$extra" ] && rules="$rules${rules:+, }$extra"

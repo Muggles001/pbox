@@ -410,7 +410,9 @@ check "多出经 CDN 的节点，直连节点不变" bash -c "
   [ \$(grep -c . '$(E)/nodes/links.txt') = \$(($links_before + 1)) ]"
 check "优选节点连优选地址，握手仍写子域名" bash -c "bash dist/pbox.sh change vless-wstls cdn www.visa.com.sg --yes && grep -q '^vless://.*@www.visa.com.sg:443?.*sni=c.example.com.*host=c.example.com.*#.*WS-CDN-Pref' '$(E)/nodes/links.txt' && grep -q '\"server_name\": \"c.example.com\"' '$(E)/nodes/sing-box.json' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null"
 check "优选地址可以是 IPv6" bash -c "bash dist/pbox.sh change vless-wstls cdn 2606:4700::1 --yes && grep -q '^vless://.*@\[2606:4700::1\]:443?' '$(E)/nodes/links.txt'"
-check "精简后只列优选节点，直连节点保留" bash -c "bash dist/pbox.sh set compact-nodes on --yes && grep -q 'WS-CDN-Pref\$' '$(E)/nodes/links.txt' && ! grep -q 'WS-CDN\$' '$(E)/nodes/links.txt' && grep -q 'WS-TLS\$' '$(E)/nodes/links.txt' && ! grep -q 'WS-CDN\"' '$(E)/nodes/sing-box.json' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null"
+check "精简后只列推荐协议，每个一个节点，兜底用优选" bash -c "bash dist/pbox.sh set compact-nodes on --yes && l='$(E)/nodes/links.txt' && [ \$(grep -c . \$l) = 3 ] && grep -q 'Reality-IPv4\$' \$l && grep -q 'Hysteria2-IPv4\$' \$l && grep -q 'WS-CDN-Pref\$' \$l && ! grep -q 'Trojan' '$(E)/nodes/mihomo.yaml' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null"
+check "精简时体检仍测全部协议" bash -c "bash dist/pbox.sh doctor 2>&1 | grep -q Trojan"
+check "精简时主力没有就由下一个顶上" bash -c "bash dist/pbox.sh user add carol trojan,vless-wstls --yes && l='$(E)/nodes/links.txt' && [ \$(grep -c -- '-carol\$' \$l) = 2 ] && grep -q 'Trojan-.*-carol\$' \$l && grep -q 'WS-CDN-Pref-carol\$' \$l && bash dist/pbox.sh user del carol --yes"
 check "关掉精简后恢复" bash -c "bash dist/pbox.sh set compact-nodes off --yes && grep -q 'WS-CDN\$' '$(E)/nodes/links.txt'"
 check "设着子域名时不能关伪装站" bash -c "bash dist/pbox.sh del trojan --yes && bash dist/pbox.sh del vless-wstls --yes && ! bash dist/pbox.sh site off --yes"
 check "停用后分流和节点里都没有子域名" bash -c "bash dist/pbox.sh add vless-wstls --yes && bash dist/pbox.sh site cdn off --yes && ! grep -q 'c.example.com' '$(E)/generated/nginx/nginx.conf' && ! grep -q 'c.example.com' '$(E)/nodes/links.txt'"
@@ -433,8 +435,29 @@ check "SS 不能和 UDP 协议用同一个端口" bash -c "bash dist/pbox.sh cha
 ss_before=$(grep '^ss://' "$(E)/nodes/links.txt" | head -1)
 check "重置用户后 SS 的用户密钥跟着变" bash -c "bash dist/pbox.sh user reset default --yes && [ \"\$(grep '^ss://' '$(E)/nodes/links.txt' | head -1)\" != '$ss_before' ]"
 check "SS 每个用户一个密钥" bash -c "bash dist/pbox.sh user add bob ss2022 --yes && python3 -c 'import json,sys; u=json.load(open(sys.argv[1]))[\"inbounds\"][0][\"users\"]; sys.exit(not (len(u)==2 and u[0][\"password\"]!=u[1][\"password\"]))' '$(E)/generated/sing-box/10_ss2022.json'"
+check "精简时不列冷门协议；只有冷门协议的用户照常列出" bash -c "bash dist/pbox.sh set compact-nodes on --yes && l='$(E)/nodes/links.txt' && grep -q 'Reality-IPv4-default\$' \$l && ! grep -q 'IPv6-default\$' \$l && ! grep -q -- '-default\$' <(grep -v -e Reality -e Hysteria2 \$l) && grep -q 'SS-IPv4-bob\$' \$l && ! grep -q 'SS-IPv6-bob\$' \$l && bash dist/pbox.sh set compact-nodes off --yes"
 check "换 XHTTP 的伪装目标和路径" bash -c "bash dist/pbox.sh change reality-xhttp sni www.example.net --yes && bash dist/pbox.sh change reality-xhttp path /p1 --yes && grep -q '\"target\": \"www.example.net:443\"' '$(E)/generated/xray/10_reality-xhttp.json' && grep -q '\"path\": \"/p1\"' '$(E)/generated/xray/10_reality-xhttp.json'"
 check "换 ShadowTLS 的握手对象" bash -c "bash dist/pbox.sh change shadowtls sni www.example.net --yes && grep -q 'host: \"www.example.net\"' '$(E)/nodes/mihomo.yaml'"
+
+echo "SOCKS5"
+new_root
+check "装上 SOCKS5" bash -c "PBOX_PROTOCOLS='reality-vision socks' bash dist/pbox.sh install --yes"
+check "SOCKS5 入站每个用户一组账号" bash -c "bash dist/pbox.sh user add bob --yes && python3 -c 'import json,sys; i=json.load(open(sys.argv[1]))[\"inbounds\"][0]; u=i[\"users\"]; sys.exit(not (i[\"type\"]==\"socks\" and sorted(x[\"username\"] for x in u)==[\"bob\",\"default\"] and u[0][\"password\"]!=u[1][\"password\"]))' '$(E)/generated/sing-box/10_socks.json'"
+check "SOCKS5 的密码不是用户密码本身" bash -c "pw=\$(sed -n 's/^password=//p' '$(E)/state/users/default.env'); ! grep -q \"\$pw\" '$(E)/generated/sing-box/10_socks.json'"
+check "SOCKS5 链接是 v2rayN 的写法" bash -c "python3 -c 'import base64,json,sys
+l=[x for x in open(sys.argv[1]) if x.startswith(\"socks://\") and x.rstrip().endswith(\"#SOCKS5-IPv4-default\")][0]
+u,pw=base64.b64decode(l[8:].split(\"@\")[0]).decode().split(\":\")
+i=[x for x in json.load(open(sys.argv[2]))[\"inbounds\"][0][\"users\"] if x[\"username\"]==\"default\"][0]
+sys.exit(not (u==\"default\" and pw==i[\"password\"]))' '$(E)/nodes/links.txt' '$(E)/generated/sing-box/10_socks.json'"
+check "SOCKS5 在两种客户端配置里" bash -c "python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null && grep -q '\"type\": \"socks\"' '$(E)/nodes/sing-box.json' && grep -q 'type: socks5' '$(E)/nodes/mihomo.yaml'"
+check "SOCKS5 只放行 TCP" bash -c "p=\$(sed -n 's/^port=//p' '$(E)/state/protocols/socks.env'); bash dist/pbox.sh nodes | grep -q \"\$p/tcp\" && ! bash dist/pbox.sh nodes | grep -q \"\$p/udp\""
+check "SOCKS5 默认不限来源" bash -c "! grep -q source_ip_cidr '$(E)/generated/sing-box/00_base.json'"
+check "SOCKS5 只允许指定来源，只作用于它自己" bash -c "bash dist/pbox.sh change socks allow 198.51.100.20,2001:db8::/32 --yes && python3 -c 'import json,sys; r=json.load(open(sys.argv[1]))[\"route\"][\"rules\"][0]; a,b=r[\"rules\"]; sys.exit(not (r[\"mode\"]==\"and\" and r[\"action\"]==\"reject\" and a==dict(inbound=[\"socks\"]) and b[\"invert\"] and b[\"source_ip_cidr\"]==[\"198.51.100.20/32\",\"2001:db8::/32\",\"127.0.0.1/32\",\"::1/128\"]))' '$(E)/generated/sing-box/00_base.json'"
+check "来源写错时拒绝，逗号后的空格不要紧" bash -c "! bash dist/pbox.sh change socks allow abc --yes && ! bash dist/pbox.sh change socks allow 1.2.3.4/33x --yes && bash dist/pbox.sh change socks allow '1.2.3.4, 5.6.7.8' --yes && grep -qx 'allow=1.2.3.4,5.6.7.8' '$(E)/state/protocols/socks.env'"
+check "改回不限后规则去掉" bash -c "bash dist/pbox.sh change socks allow any --yes && ! grep -q source_ip_cidr '$(E)/generated/sing-box/00_base.json'"
+check "停用 SOCKS5 后规则跟着去掉" bash -c "bash dist/pbox.sh change socks allow 1.2.3.4 --yes && bash dist/pbox.sh del socks --yes && ! grep -q source_ip_cidr '$(E)/generated/sing-box/00_base.json' && bash dist/pbox.sh add socks --yes"
+socks_before=$(grep '^socks://.*-default$' "$(E)/nodes/links.txt")
+check "重置用户后 SOCKS5 的密码跟着变" bash -c "bash dist/pbox.sh user reset default --yes && [ \"\$(grep '^socks://.*-default\$' '$(E)/nodes/links.txt')\" != '$socks_before' ]"
 
 echo "链式中转"
 new_root
@@ -466,6 +489,7 @@ check "落地机上不能用中转机给别人的码" bash -c "! bash dist/pbox.
 check "落地机加上中转" pbox relay via "$code2"
 check "经中转的节点用中转机的地址和端口" grep -q "@198.51.100.20:$lp?.*#HK-Reality-Via-JP" "$(E)/nodes/links.txt"
 check "经中转的 Hysteria2 不带端口跳跃，直连的仍带" bash -c "grep '#HK-Hysteria2-Via-JP' '$(E)/nodes/links.txt' | grep -vq mport && grep '#HK-Hysteria2-IPv4' '$(E)/nodes/links.txt' | grep -q mport"
+check "精简时经中转的节点优先" bash -c "bash dist/pbox.sh set compact-nodes on --yes && l='$(E)/nodes/links.txt' && [ \$(grep -c . \$l) = 2 ] && grep -q 'HK-Reality-Via-JP\$' \$l && grep -q 'HK-Hysteria2-Via-JP\$' \$l && bash dist/pbox.sh set compact-nodes off --yes"
 check "两种客户端配置里都有" bash -c "json_ok() { python3 -m json.tool \"\$1\"; }; json_ok '$(E)/nodes/sing-box.json' >/dev/null && grep -q '\"server_port\": $lp' '$(E)/nodes/sing-box.json' && grep -q 'HK-Reality-Via-JP' '$(E)/nodes/mihomo.yaml'"
 export PBOX_TEST_DNS_A=203.0.113.10
 pbox domain set w.example.com --yes >/dev/null 2>&1

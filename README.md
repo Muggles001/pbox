@@ -36,7 +36,7 @@ bash pbox.sh install
 | VLESS-Reality-Vision | 默认主力，不需要域名 |
 | Hysteria2 | 默认提速，可开端口跳跃和流量混淆 |
 | TUIC、AnyTLS | 可选。TUIC 基于 UDP；AnyTLS 基于 TCP，需要较新的客户端 |
-| Reality-XHTTP、ShadowTLS、Shadowsocks 2022 | 可选。XHTTP 只给 v2rayN/NG 这类 Xray 客户端；ShadowTLS 只在 Clash 和 sing-box 配置里；SS2022 主要用于中转落地 |
+| Reality-XHTTP、ShadowTLS、Shadowsocks 2022、SOCKS5 | 可选。XHTTP 只给 v2rayN/NG 这类 Xray 客户端；ShadowTLS 只在 Clash 和 sing-box 配置里；SS2022 和 SOCKS5 主要用于中转落地，SOCKS5 可限定来源 |
 | VLESS-WS-Argo | 经 Cloudflare 隧道，不需要域名、不开放端口；支持临时与固定隧道、优选地址 |
 | 多用户 | 每人一套独立凭据，可单独重置和删除，可指定每人能用哪些协议 |
 | 域名证书 | 有域名时一步申请受信任的证书并自动续期，Hysteria2、TUIC、AnyTLS 不再需要指纹或跳过验证 |

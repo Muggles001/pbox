@@ -62,7 +62,7 @@ choose() {
 }
 
 menu_proto() {
-  local id="$1" n=0 k_port k_sni k_ext k_off k_hop k_cdn k_fix k_tmp k_obfs k_path k_cc k_fp k_keys k_eport
+  local id="$1" n=0 k_port k_sni k_ext k_off k_hop k_cdn k_fix k_tmp k_obfs k_path k_cc k_fp k_keys k_eport k_allow
   while :; do
     menu_header "$(pmeta "$id" title)"
     if ! proto_enabled "$id"; then
@@ -95,6 +95,11 @@ menu_proto() {
       n=$((n + 1)) k_cdn=$n
       printf "$T_m_fmt" "$n" "$(t mp_cdn)" "${C_D}[$(pget "$id" cdn_addr "$(t off)")] $(t mp_cdn_d)${C_0}"
     fi
+    k_allow=""
+    if [ "$id" = socks ]; then
+      n=$((n + 1)) k_allow=$n
+      printf "$T_m_fmt" "$n" "$(t mp_allow)" "${C_D}[$(pget socks allow "$(t mp_allow_any)")] $(t mp_allow_d)${C_0}"
+    fi
     k_cc=""
     if [ "$id" = tuic ]; then
       n=$((n + 1)) k_cc=$n
@@ -121,7 +126,7 @@ menu_proto() {
       n=$((n + 1)) k_eport=$n
       printf "$T_m_fmt" "$n" "$(t mp_eport)" "${C_D}[$(vless_ws_eport)] $(t mp_eport_d)${C_0}"
     fi
-    if [ "$id" != hysteria2 ] && [ "$id" != tuic ] && [ "$id" != anytls ] && [ "$id" != ss2022 ]; then
+    if [ "$id" != hysteria2 ] && [ "$id" != tuic ] && [ "$id" != anytls ] && [ "$id" != ss2022 ] && [ "$id" != socks ]; then
       n=$((n + 1)) k_fp=$n
       printf "$T_m_fmt" "$n" "$(t mp_fp)" "${C_D}[$(fp_of "$id")] $(t mp_fp_d)${C_0}"
     fi
@@ -149,6 +154,9 @@ menu_proto() {
         if [ -n "$k_sni" ] && [ "$REPLY" = "$k_sni" ]; then
           ask " $(t mp_ask_sni)" ""
           run cmd_change "$id" sni "${REPLY:-auto}"
+        elif [ -n "$k_allow" ] && [ "$REPLY" = "$k_allow" ]; then
+          ask " $(t mp_ask_allow)" "any"
+          run cmd_change socks allow "$REPLY"
         elif [ -n "$k_cc" ] && [ "$REPLY" = "$k_cc" ]; then
           ask " $(t mp_ask_cc)" "bbr"
           run cmd_change tuic cc "$REPLY"

@@ -24,6 +24,7 @@ src/protocols/anytls.sh
 src/protocols/trojan.sh
 src/protocols/vless-wstls.sh
 src/protocols/ss2022.sh
+src/protocols/socks.sh
 src/protocols/shadowtls.sh
 src/protocols/reality-xhttp.sh
 src/lib/conflict.sh

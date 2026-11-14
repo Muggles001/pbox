@@ -96,7 +96,7 @@ install_customize() {
     picked="$picked $id"
     case "$id" in
       reality-vision) k=PBOX_REALITY_PORT ;; hysteria2) k=PBOX_HY2_PORT ;; tuic) k=PBOX_TUIC_PORT ;; anytls) k=PBOX_ANYTLS_PORT ;;
-      reality-xhttp) k=PBOX_XHTTP_PORT ;; shadowtls) k=PBOX_STLS_PORT ;; ss2022) k=PBOX_SS_PORT ;; *) k="" ;;
+      reality-xhttp) k=PBOX_XHTTP_PORT ;; shadowtls) k=PBOX_STLS_PORT ;; ss2022) k=PBOX_SS_PORT ;; socks) k=PBOX_SOCKS_PORT ;; *) k="" ;;
     esac
     [ -n "$k" ] || continue
     ask "  $(t inst_port_q)" ""
@@ -285,6 +285,16 @@ cmd_change() {
         *) valid_domain "$val" || printf '%s' "$val" | grep -Eq '^[0-9a-fA-F:.]+$' || { txn_abort; die "$(t bad_domain "$val")"; } ;;
       esac
       pset "$id" cdn_addr "$val"
+      ;;
+    allow)
+      [ "$id" = socks ] || { txn_abort; die "$(t change_usage)"; }
+      # 逗号后带空格时，名单会被拆成几个参数
+      val=$(printf '%s' "${*:3}" | tr -d ' ' | sed 's/,,*/,/g; s/^,//; s/,$//')
+      case "$val" in
+        any | off | auto) val="" ;;
+        *) socks_allow_ok "$val" || { txn_abort; die "$(t bad_allow "$val")"; } ;;
+      esac
+      pset socks allow "$val"
       ;;
     cc)
       [ "$id" = tuic ] || { txn_abort; die "$(t change_usage)"; }
@@ -504,6 +514,7 @@ pbox $PBOX_VERSION
   pbox change hysteria2 obfs <on|off>
   pbox change <vless-ws|vless-wstls|reality-xhttp> path <auto|/xxx>
   pbox change tuic cc <bbr|cubic|new_reno>
+  pbox change socks allow <IP,网段,...|any>
   pbox change <vless-ws|vless-wstls> cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
   pbox change <reality-vision|reality-xhttp|shadowtls> sni <domain|auto>
