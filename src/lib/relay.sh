@@ -85,11 +85,12 @@ relay_pick_port() { # <想要的端口> <l4> <本次已分配的端口...>
 
 # sing-box 入站：每个转发端口一个 direct 入站，目的地改写成落地机
 relay_render_inbounds() {
-  local key name host m lp r sep="" net
+  local key name host m lp r sep="" net rf
   echo '{'
   echo '  "inbounds": ['
   for key in $(relay_keys fwd); do
-    set -- $(rget "$key")
+    read -ra rf <<<"$(rget "$key")"
+    set -- "${rf[@]}"
     name=$1 host=$2
     shift 2
     for m in "$@"; do
@@ -106,9 +107,10 @@ relay_render_inbounds() {
 
 # 路由里排在最前：转发的目的地是用户自己指定的落地机，不受私网拦截和 WARP 规则影响
 relay_route_rule() {
-  local key name m tags=""
+  local key name m tags="" rf
   for key in $(relay_keys fwd); do
-    set -- $(rget "$key")
+    read -ra rf <<<"$(rget "$key")"
+    set -- "${rf[@]}"
     name=$1
     shift 2
     for m in "$@"; do tags="$tags${tags:+, }\"relay-$name-${m%%=*}\""; done
@@ -119,11 +121,12 @@ relay_route_rule() {
 
 # 给 node_each 用：协议 <id> 经各个中转机的地址行，第四段是端口对应关系
 relay_via_hosts() { # <协议>
-  local key p name host
+  local key p name host rf
   relay_able "$1" || return 0
   p=$(NODE_VIA="" pubport "$1")
   for key in $(relay_keys via); do
-    set -- $(rget "$key")
+    read -ra rf <<<"$(rget "$key")"
+    set -- "${rf[@]}"
     name=$1 host=$2
     shift 2
     # 建中转之后才启用的协议，中转机上还没有它的端口
@@ -227,10 +230,11 @@ relay_off() { # <fwd|via> <名字>
 }
 
 relay_status() {
-  local key name host m spec p any=0
+  local key name host m spec p any=0 rf
   for key in $(relay_keys fwd); do
     any=1
-    set -- $(rget "$key")
+    read -ra rf <<<"$(rget "$key")"
+    set -- "${rf[@]}"
     name=$1 host=$2
     shift 2
     for m in "$@"; do say "$(t relay_st_fwd "$name" "${m%%=*}" "$(host_fmt "$host")" "${m#*=}")"; done
@@ -238,7 +242,8 @@ relay_status() {
   spec=$(relay_ports_spec)
   for key in $(relay_keys via); do
     any=1
-    set -- $(rget "$key")
+    read -ra rf <<<"$(rget "$key")"
+    set -- "${rf[@]}"
     name=$1 host=$2
     shift 2
     say "$(t relay_st_via "$name" "$host" "$*")"
@@ -251,10 +256,11 @@ relay_status() {
 
 # 体检：中转机能不能连到落地机。UDP 没有简单的测法，只测 TCP。
 d_relay() {
-  local key name host m tp rc=0
+  local key name host m tp rc=0 rf
   testing && return 0
   for key in $(relay_keys fwd); do
-    set -- $(rget "$key")
+    read -ra rf <<<"$(rget "$key")"
+    set -- "${rf[@]}"
     name=$1 host=$2
     shift 2
     for m in "$@"; do
