@@ -230,6 +230,7 @@ edit_end() { # [same]：本次改动不影响本机节点，不提示链接变�
   sub_push || warn "$(t sub_push_fail)"
   say "${C_G}$(t applied)${C_0}"
   [ "${1:-}" = same ] || note "$(t links_changed)"
+  relay_missing_note
 }
 
 cmd_add() {

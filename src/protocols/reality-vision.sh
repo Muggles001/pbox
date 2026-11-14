@@ -25,14 +25,8 @@ proto_reality_vision_plan() {
 
 proto_reality_vision_secrets() {
   local sni keys
-  sni=$(opt REALITY_SNI)
-  if [ -n "$sni" ]; then
-    valid_domain "$sni" || die "$(t bad_domain "$sni")"
-    reality_check "$sni" >/dev/null || die "$(t reality_bad_target "$sni")"
-  else
-    say "$(t reality_picking)"
-    sni=$(reality_pick) || die "$(t reality_none)"
-  fi
+  reality_sni_choose REALITY_SNI
+  sni=$REPLY
   keys=$(gen_reality_keypair) || die "$(t keygen_fail)"
   pset reality-vision sni "$sni"
   pset reality-vision private_key "$(printf '%s\n' "$keys" | sed -n 1p)"
@@ -137,7 +131,6 @@ EOF
 }
 
 proto_reality_vision_doctor() {
-  local sni
   if proto_reality_vision_selftest; then
     ok "$(t d_self_ok Reality)"
   else
@@ -145,13 +138,5 @@ proto_reality_vision_doctor() {
     hint "pbox log"
     return 1
   fi
-  sni=$(pget reality-vision sni)
-  # 对外的探测偶尔会因为网络抖动失败一次，所以再试一次才下结论
-  if reality_check "$sni" >/dev/null || { sleep 2; reality_check "$sni" >/dev/null; }; then
-    ok "$(t d_reality_ok "$sni")"
-  else
-    bad "$(t d_reality_bad "$sni")"
-    hint "pbox change reality-vision sni auto"
-    return 1
-  fi
+  d_reality_target reality-vision d_reality_ok d_reality_bad
 }

@@ -87,28 +87,7 @@ proto_trojan_client_mihomo() {
 EOF
 }
 
-# 从本机的 443 进去，经过分流再到 Trojan，和客户端走的路一样
-proto_trojan_selftest() {
-  local d p u dom rc
-  d=$(mktemp -d) p=$(random_port tcp) u=$(proto_users trojan | head -1) dom=$(gget tls_domain)
-  cat >"$d/c.json" <<EOF
-{"log": {"disabled": true},
- "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
- "outbounds": [{"type": "trojan", "server": "127.0.0.1", "server_port": 443,
-  "password": "$(uget "$u" password)",
-  "tls": {"enabled": true, "server_name": "$dom"}}]}
-EOF
-  selftest singbox "$d/c.json" "$p"
-  rc=$?
-  rm -rf "$d"
-  return $rc
-}
+# 自测从本机的 443 进去，经过分流再到 Trojan，和客户端走的路一样
+proto_trojan_selftest() { selftest_client trojan; }
 
-proto_trojan_doctor() {
-  if proto_trojan_selftest; then
-    ok "$(t d_self_ok Trojan)"
-  else
-    bad "$(t d_self_bad Trojan)"
-    return 1
-  fi
-}
+proto_trojan_doctor() { doctor_selftest trojan; }

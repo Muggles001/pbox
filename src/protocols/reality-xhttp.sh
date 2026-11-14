@@ -28,14 +28,8 @@ proto_reality_xhttp_plan() {
 
 proto_reality_xhttp_secrets() {
   local sni keys
-  sni=$(opt XHTTP_SNI)
-  if [ -n "$sni" ]; then
-    valid_domain "$sni" || die "$(t bad_domain "$sni")"
-    reality_check "$sni" >/dev/null || die "$(t reality_bad_target "$sni")"
-  else
-    say "$(t reality_picking)"
-    sni=$(reality_pick) || die "$(t reality_none)"
-  fi
+  reality_sni_choose XHTTP_SNI
+  sni=$REPLY
   keys=$(gen_reality_keypair) || die "$(t keygen_fail)"
   pset reality-xhttp sni "$sni"
   pset reality-xhttp private_key "$(printf '%s\n' "$keys" | sed -n 1p)"
@@ -105,7 +99,6 @@ EOF
 }
 
 proto_reality_xhttp_doctor() {
-  local sni
   if proto_reality_xhttp_selftest; then
     ok "$(t d_self_ok Reality-XHTTP)"
   else
@@ -113,12 +106,5 @@ proto_reality_xhttp_doctor() {
     hint "pbox log"
     return 1
   fi
-  sni=$(pget reality-xhttp sni)
-  if reality_check "$sni" >/dev/null || { sleep 2; reality_check "$sni" >/dev/null; }; then
-    ok "$(t d_reality_ok "$sni")"
-  else
-    bad "$(t d_reality_bad "$sni")"
-    hint "pbox change reality-xhttp sni auto"
-    return 1
-  fi
+  d_reality_target reality-xhttp d_reality_ok d_reality_bad
 }

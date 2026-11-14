@@ -107,26 +107,6 @@ proto_socks_client_mihomo() {
 EOF
 }
 
-proto_socks_selftest() {
-  local d p u rc
-  d=$(mktemp -d) p=$(random_port tcp) u=$(proto_users socks | head -1)
-  cat >"$d/c.json" <<EOF
-{"log": {"disabled": true},
- "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
- "outbounds": [{"type": "socks", "server": "127.0.0.1", "server_port": $(pget socks port),
-  "version": "5", "username": "$u", "password": "$(socks_pass "$u")"}]}
-EOF
-  selftest singbox "$d/c.json" "$p"
-  rc=$?
-  rm -rf "$d"
-  return $rc
-}
+proto_socks_selftest() { selftest_client socks; }
 
-proto_socks_doctor() {
-  if proto_socks_selftest; then
-    ok "$(t d_self_ok SOCKS5)"
-  else
-    bad "$(t d_self_bad SOCKS5)"
-    return 1
-  fi
-}
+proto_socks_doctor() { doctor_selftest socks; }

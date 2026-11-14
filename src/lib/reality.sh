@@ -104,3 +104,29 @@ reality_pick() {
 
 # 自签证书用的域名：只需要像个正常域名，不需要实测。
 random_sni() { reality_candidates | shuffle | sed -n '1p'; }
+
+# 伪装目标（ShadowTLS 的握手对象同理）：用户指定的先验证，没指定就自动挑。结果在 REPLY
+reality_sni_choose() { # <选项名，如 REALITY_SNI>
+  REPLY=$(opt "$1")
+  if [ -n "$REPLY" ]; then
+    valid_domain "$REPLY" || die "$(t bad_domain "$REPLY")"
+    reality_check "$REPLY" >/dev/null || die "$(t reality_bad_target "$REPLY")"
+  else
+    say "$(t reality_picking)"
+    REPLY=$(reality_pick) || die "$(t reality_none)"
+  fi
+}
+
+# 体检：协议 <id> 借用的那个网站还合不合用。
+# 对外的探测偶尔会因为网络抖动失败一次，所以再试一次才下结论
+d_reality_target() { # <协议> <通过的文案> <不通过的文案>
+  local sni
+  sni=$(pget "$1" sni)
+  if reality_check "$sni" >/dev/null || { sleep 2; reality_check "$sni" >/dev/null; }; then
+    ok "$(t "$2" "$sni")"
+  else
+    bad "$(t "$3" "$sni")"
+    hint "pbox change $1 sni auto"
+    return 1
+  fi
+}

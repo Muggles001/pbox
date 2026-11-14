@@ -57,21 +57,11 @@ wstls_hosts() { # <协议>
 wstls_name() { printf '%s' "${NODE_EXTRA:-$(gget tls_domain)}"; }
 
 # wstls_selftest <协议> <客户端连接的地址> <握手里的名字>。直连节点从本机的 443 进去；
-# 经 CDN 的节点走完整链路：本机 → Cloudflare → 本机的 443 → 内核 → 外网。
-# 出站就用给客户端的那份配置，只把地址换掉
+# 经 CDN 的节点走完整链路：本机 → Cloudflare → 本机的 443 → 内核 → 外网
 wstls_selftest() {
-  local d p u srv rc
-  d=$(mktemp -d) p=$(random_port tcp) u=$(proto_users "$1" | head -1) srv="$2"
+  local srv="$2"
   [ "$2" = "$(gget tls_domain)" ] && srv=127.0.0.1
-  cat >"$d/c.json" <<EOF
-{"log": {"disabled": true},
- "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
- "outbounds": [$(NODE_EXTRA="$3" NODE_VIA="" pcall "$1" client_singbox "$u" "$srv" selftest)]}
-EOF
-  selftest singbox "$d/c.json" "$p"
-  rc=$?
-  rm -rf "$d"
-  return $rc
+  selftest_client "$1" "$srv" "$3"
 }
 
 wstls_doctor() { # <协议>

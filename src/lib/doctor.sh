@@ -131,6 +131,36 @@ selftest() {
   return $rc
 }
 
+# 用给客户端的那份 sing-box 出站做自测，测的就是用户实际拿到的配置，协议模块不必再手写一份。
+# 地址换成 <地址>（默认本机）；NAT 机器上给客户端的是外网端口，本机要连的是监听端口，
+# 借经中转时的端口换算把它换回来
+selftest_client() { # <协议> [地址] [握手里的名字]
+  local d p u rc lp
+  d=$(mktemp -d) p=$(random_port tcp) u=$(proto_users "$1" | head -1)
+  if [ "$(pmeta "$1" behind)" = site ]; then lp=443; else lp=$(pget "$1" port); fi
+  cat >"$d/c.json" <<EOF
+{"log": {"disabled": true},
+ "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
+ "outbounds": [
+$(NODE_EXTRA="${3:-}" NODE_VIA="$(NODE_VIA="" pubport "$1")=$lp" pcall "$1" client_singbox "$u" "${2:-127.0.0.1}" selftest)
+ ]}
+EOF
+  selftest singbox "$d/c.json" "$p"
+  rc=$?
+  rm -rf "$d"
+  return $rc
+}
+
+# 多数协议的体检就是自测一次
+doctor_selftest() { # <协议>
+  if pcall "$1" selftest; then
+    ok "$(t d_self_ok "$(pmeta "$1" title)")"
+  else
+    bad "$(t d_self_bad "$(pmeta "$1" title)")"
+    return 1
+  fi
+}
+
 d_resources() {
   local mem disk
   mem=$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo 2>/dev/null)

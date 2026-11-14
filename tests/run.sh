@@ -527,6 +527,7 @@ pbox domain set w.example.com --yes >/dev/null 2>&1
 pbox site on --yes >/dev/null 2>&1
 pbox add trojan --yes >/dev/null 2>&1
 check "经中转的 Trojan 仍以自己的域名握手" grep -q "@198.51.100.20:$lp?security=tls&sni=w.example.com.*#HK-Trojan-Via-JP" "$(E)/nodes/links.txt"
+check "建中转之后才开的协议，生效时提醒还没经中转" bash -c "bash dist/pbox.sh add tuic --yes 2>&1 | grep '还没有经 JP 中转' >/dev/null && ! grep -q 'TUIC-Via-JP' '$(E)/nodes/links.txt' && bash dist/pbox.sh relay 2>&1 | grep '还没有经 JP 中转' >/dev/null"
 unset PBOX_TEST_DNS_A
 check "删除中转后经它的节点消失" bash -c "bash dist/pbox.sh relay via off JP >/dev/null && ! grep -q Via-JP '$(E)/nodes/links.txt'"
 export PBOX_ROOT="$relay" PBOX_TEST_IP4=198.51.100.20

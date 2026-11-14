@@ -92,26 +92,6 @@ proto_ss2022_client_mihomo() {
 EOF
 }
 
-proto_ss2022_selftest() {
-  local d p u rc
-  d=$(mktemp -d) p=$(random_port tcp) u=$(proto_users ss2022 | head -1)
-  cat >"$d/c.json" <<EOF
-{"log": {"disabled": true},
- "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
- "outbounds": [{"type": "shadowsocks", "server": "127.0.0.1", "server_port": $(pget ss2022 port),
-  "method": "$SS_METHOD", "password": "$(pget ss2022 psk):$(ss_user_key "$u")"}]}
-EOF
-  selftest singbox "$d/c.json" "$p"
-  rc=$?
-  rm -rf "$d"
-  return $rc
-}
+proto_ss2022_selftest() { selftest_client ss2022; }
 
-proto_ss2022_doctor() {
-  if proto_ss2022_selftest; then
-    ok "$(t d_self_ok Shadowsocks-2022)"
-  else
-    bad "$(t d_self_bad Shadowsocks-2022)"
-    return 1
-  fi
-}
+proto_ss2022_doctor() { doctor_selftest ss2022; }

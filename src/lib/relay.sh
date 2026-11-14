@@ -19,6 +19,15 @@ relay_keys() { [ -f "$CUR/relay.env" ] && sed -n "s/^\($1_[a-z0-9_]*\)=.*/\1/p" 
 relay_key() { printf '%s_%s' "$1" "$(printf '%s' "$2" | tr 'A-Z-' 'a-z_')"; }
 relay_fwd_any() { [ -n "$(relay_keys fwd)" ]; }
 
+# 逐条记录回调：relay_each <fwd|via> <函数>，回调参数为 <名字> <对方地址> <端口对应...>
+relay_each() {
+  local key rf
+  for key in $(relay_keys "$1"); do
+    read -ra rf <<<"$(rget "$key")"
+    "$2" "${rf[@]}"
+  done
+}
+
 relay_encode() { printf '%s' "$1" | openssl base64 -A; }
 relay_decode() { printf '%s' "$1" | openssl base64 -d -A 2>/dev/null; }
 relay_name_ok() { printf '%s' "$1" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9-]{0,15}$'; }
@@ -41,17 +50,17 @@ relay_ports_spec() {
 }
 
 # 中转机上转发占用的端口，每行 <端口>/<tcp|udp>
-relay_fwd_ports() {
-  local key m
-  for key in $(relay_keys fwd); do
-    for m in $(rget "$key" | cut -d' ' -f3-); do
-      case "${m#*/}" in
-        tcp+udp) echo "${m%%=*}/tcp"; echo "${m%%=*}/udp" ;;
-        *) echo "${m%%=*}/${m#*/}" ;;
-      esac
-    done
+_relay_fwd_ports() {
+  local m
+  shift 2
+  for m in "$@"; do
+    case "${m#*/}" in
+      tcp+udp) echo "${m%%=*}/tcp"; echo "${m%%=*}/udp" ;;
+      *) echo "${m%%=*}/${m#*/}" ;;
+    esac
   done
 }
+relay_fwd_ports() { relay_each fwd _relay_fwd_ports; }
 
 # 端口 <p> 在本机是否已被占用（l4 可以是 tcp+udp）：节点、伪装站、端口跳跃、其他转发，以及系统里正在监听的
 relay_port_taken() { # <端口> <l4> <本次已分配的端口...>
@@ -84,55 +93,69 @@ relay_pick_port() { # <想要的端口> <l4> <本次已分配的端口...>
 }
 
 # sing-box 入站：每个转发端口一个 direct 入站，目的地改写成落地机
-relay_render_inbounds() {
-  local key name host m lp r sep="" net rf
-  echo '{'
-  echo '  "inbounds": ['
-  for key in $(relay_keys fwd); do
-    read -ra rf <<<"$(rget "$key")"
-    set -- "${rf[@]}"
-    name=$1 host=$2
-    shift 2
-    for m in "$@"; do
-      lp=${m%%=*} r=${m#*=}
-      net=""
-      [ "${r#*/}" = tcp+udp ] || net="\"network\": \"${r#*/}\", "
-      printf '%s    {"type": "direct", "tag": "relay-%s-%s", "listen": "%s", "listen_port": %s, %s"override_address": "%s", "override_port": %s}' \
-        "$sep" "$name" "$lp" "$(listen_addr)" "$lp" "$net" "$host" "${r%%/*}"
-      sep=$',\n'
-    done
+_relay_inbounds() {
+  local name="$1" host="$2" m lp r net
+  shift 2
+  for m in "$@"; do
+    lp=${m%%=*} r=${m#*=}
+    net=""
+    [ "${r#*/}" = tcp+udp ] || net="\"network\": \"${r#*/}\", "
+    printf '    {"type": "direct", "tag": "relay-%s-%s", "listen": "%s", "listen_port": %s, %s"override_address": "%s", "override_port": %s}\n' \
+      "$name" "$lp" "$(listen_addr)" "$lp" "$net" "$host" "${r%%/*}"
   done
-  printf '\n  ]\n}\n'
+}
+relay_render_inbounds() {
+  printf '{\n  "inbounds": [\n'
+  relay_each fwd _relay_inbounds | sed '$!s/$/,/'
+  printf '  ]\n}\n'
 }
 
 # 路由里排在最前：转发的目的地是用户自己指定的落地机，不受私网拦截和 WARP 规则影响
+_relay_tags() {
+  local name="$1" m
+  shift 2
+  for m in "$@"; do printf '"relay-%s-%s"\n' "$name" "${m%%=*}"; done
+}
 relay_route_rule() {
-  local key name m tags="" rf
-  for key in $(relay_keys fwd); do
-    read -ra rf <<<"$(rget "$key")"
-    set -- "${rf[@]}"
-    name=$1
-    shift 2
-    for m in "$@"; do tags="$tags${tags:+, }\"relay-$name-${m%%=*}\""; done
-  done
+  local tags
+  tags=$(relay_each fwd _relay_tags | paste -sd, -)
   [ -n "$tags" ] && printf '{"inbound": [%s], "action": "route", "outbound": "direct"}' "$tags"
   return 0
 }
 
-# 给 node_each 用：协议 <id> 经各个中转机的地址行，第四段是端口对应关系
+# 给 node_each 用：协议 <id> 经各个中转机的地址行，第四段是端口对应关系。
+# 建中转之后才启用的协议，中转机上还没有它的端口，不输出
+_relay_via_host() { # 调用方的 p 是这个协议对外的端口
+  local name="$1" host="$2"
+  shift 2
+  case " $* " in *" $p="*) echo "Via-$name|$host||$*" ;; esac
+}
 relay_via_hosts() { # <协议>
-  local key p name host rf
+  local p
   relay_able "$1" || return 0
   p=$(NODE_VIA="" pubport "$1")
-  for key in $(relay_keys via); do
-    read -ra rf <<<"$(rget "$key")"
-    set -- "${rf[@]}"
-    name=$1 host=$2
-    shift 2
-    # 建中转之后才启用的协议，中转机上还没有它的端口
-    case " $* " in *" $p="*) ;; *) continue ;; esac
-    echo "Via-$name|$host||$*"
+  relay_each via _relay_via_host
+}
+
+# 落地机上还没有经中转机 <名字> 转发的端口：建中转之后才启用或改过端口的协议
+_relay_missing() { # 调用方的 spec 是 relay_ports_spec 的结果
+  local name="$1" x
+  shift 2
+  for x in $spec; do
+    case " $* " in *" ${x%%/*}="*) ;; *) echo "${x%%/*} $name" ;; esac
   done
+}
+relay_missing() {
+  local spec
+  [ -n "$(relay_keys via)" ] || return 0
+  spec=$(relay_ports_spec)
+  relay_each via _relay_missing
+}
+
+# 改动生效后提醒一次，免得用户以为新协议也经中转了
+relay_missing_note() {
+  local port name
+  relay_missing | while read -r port name; do note "$(t relay_missing "$port" "$name")"; done
 }
 
 # 落地机：输出给中转机用的中转码
@@ -229,52 +252,73 @@ relay_off() { # <fwd|via> <名字>
   if [ "$1" = fwd ]; then edit_end same; else edit_end; fi
 }
 
+_relay_st_fwd() {
+  local name="$1" host="$2" m
+  shift 2
+  for m in "$@"; do say "$(t relay_st_fwd "$name" "${m%%=*}" "$(host_fmt "$host")" "${m#*=}")"; done
+}
+_relay_st_via() {
+  local name="$1" host="$2"
+  shift 2
+  say "$(t relay_st_via "$name" "$host" "$*")"
+}
 relay_status() {
-  local key name host m spec p any=0 rf
-  for key in $(relay_keys fwd); do
-    any=1
-    read -ra rf <<<"$(rget "$key")"
-    set -- "${rf[@]}"
-    name=$1 host=$2
-    shift 2
-    for m in "$@"; do say "$(t relay_st_fwd "$name" "${m%%=*}" "$(host_fmt "$host")" "${m#*=}")"; done
-  done
-  spec=$(relay_ports_spec)
-  for key in $(relay_keys via); do
-    any=1
-    read -ra rf <<<"$(rget "$key")"
-    set -- "${rf[@]}"
-    name=$1 host=$2
-    shift 2
-    say "$(t relay_st_via "$name" "$host" "$*")"
-    for p in $spec; do
-      case " $* " in *" ${p%%/*}="*) ;; *) note "$(t relay_missing "${p%%/*}" "$name")" ;; esac
-    done
-  done
-  [ $any = 1 ] || say "$(t relay_intro)"
+  if [ -z "$(relay_keys fwd)$(relay_keys via)" ]; then
+    say "$(t relay_intro)"
+    return 0
+  fi
+  relay_each fwd _relay_st_fwd
+  relay_each via _relay_st_via
+  relay_missing_note
 }
 
-# 体检：中转机能不能连到落地机。UDP 没有简单的测法，只测 TCP。
-d_relay() {
-  local key name host m tp rc=0 rf
-  testing && return 0
-  for key in $(relay_keys fwd); do
-    read -ra rf <<<"$(rget "$key")"
-    set -- "${rf[@]}"
-    name=$1 host=$2
-    shift 2
-    for m in "$@"; do
-      case "${m#*/}" in udp) continue ;; esac
-      tp=${m#*=} tp=${tp%%/*}
-      if timeout 5 bash -c "exec 3<>/dev/tcp/$host/$tp" 2>/dev/null; then
-        ok "$(t d_relay_ok "$name" "$(host_fmt "$host")" "$tp")"
+# 体检用：能不能连到 <地址> 的 TCP 端口。UDP 没有简单的测法，不测
+relay_tcp_ok() { timeout 5 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; }
+
+# 中转机：能不能连到落地机
+_d_relay_fwd() { # 调用方的 rc 记录结果
+  local name="$1" host="$2" m tp
+  shift 2
+  for m in "$@"; do
+    case "${m#*/}" in udp) continue ;; esac
+    tp=${m#*=} tp=${tp%%/*}
+    if relay_tcp_ok "$host" "$tp"; then
+      ok "$(t d_relay_ok "$name" "$(host_fmt "$host")" "$tp")"
+    else
+      bad "$(t d_relay_bad "$name" "$(host_fmt "$host")" "$tp")"
+      hint "$(t d_relay_hint)"
+      rc=1
+    fi
+  done
+}
+
+# 落地机：中转机上的转发端口通不通。只从本机连过去，不代表从用户那里也能连上
+_d_relay_via() { # 调用方的 rc 记录结果，spec 是 relay_ports_spec 的结果
+  local name="$1" host="$2" m x
+  shift 2
+  for m in "$@"; do
+    for x in $spec; do
+      [ "${x%%/*}" = "${m%%=*}" ] || continue
+      case "${x#*/}" in udp) continue ;; esac
+      if relay_tcp_ok "$host" "${m#*=}"; then
+        ok "$(t d_via_ok "$name" "$(host_fmt "$host")" "${m#*=}")"
       else
-        bad "$(t d_relay_bad "$name" "$(host_fmt "$host")" "$tp")"
-        hint "$(t d_relay_hint)"
+        bad "$(t d_via_bad "$name" "$(host_fmt "$host")" "${m#*=}")"
+        hint "$(t d_via_hint)"
         rc=1
       fi
     done
   done
+}
+
+d_relay() {
+  local rc=0 spec
+  testing && return 0
+  relay_each fwd _d_relay_fwd
+  if [ -n "$(relay_keys via)" ]; then
+    spec=$(relay_ports_spec)
+    relay_each via _d_relay_via
+  fi
   return $rc
 }
 

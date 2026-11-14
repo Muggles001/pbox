@@ -111,11 +111,4 @@ EOF
   return $rc
 }
 
-proto_anytls_doctor() {
-  if proto_anytls_selftest; then
-    ok "$(t d_self_ok AnyTLS)"
-  else
-    bad "$(t d_self_bad AnyTLS)"
-    return 1
-  fi
-}
+proto_anytls_doctor() { doctor_selftest anytls; }

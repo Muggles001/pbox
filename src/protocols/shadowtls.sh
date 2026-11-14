@@ -31,14 +31,8 @@ proto_shadowtls_plan() {
 # 握手对象和 Reality 的伪装目标是同一类网站：要支持 TLS 1.3。直接用同一份实测过的名单。
 proto_shadowtls_secrets() {
   local sni
-  sni=$(opt STLS_SNI)
-  if [ -n "$sni" ]; then
-    valid_domain "$sni" || die "$(t bad_domain "$sni")"
-    reality_check "$sni" >/dev/null || die "$(t reality_bad_target "$sni")"
-  else
-    say "$(t reality_picking)"
-    sni=$(reality_pick) || die "$(t reality_none)"
-  fi
+  reality_sni_choose STLS_SNI
+  sni=$REPLY
   pset shadowtls sni "$sni"
   pset shadowtls psk "$(ss_new_key)"
 }
@@ -119,38 +113,9 @@ proto_shadowtls_client_mihomo() {
 EOF
 }
 
-proto_shadowtls_selftest() {
-  local d p u rc
-  d=$(mktemp -d) p=$(random_port tcp) u=$(proto_users shadowtls | head -1)
-  cat >"$d/c.json" <<EOF
-{"log": {"disabled": true},
- "inbounds": [{"type": "mixed", "listen": "127.0.0.1", "listen_port": $p}],
- "outbounds": [
-  {"type": "shadowsocks", "method": "$SS_METHOD", "password": "$(pget shadowtls psk):$(ss_user_key "$u")", "detour": "stls"},
-  {"type": "shadowtls", "tag": "stls", "server": "127.0.0.1", "server_port": $(pget shadowtls port), "version": 3,
-   "password": "$(uget "$u" password)",
-   "tls": {"enabled": true, "server_name": "$(pget shadowtls sni)", "utls": {"enabled": true, "fingerprint": "chrome"}}}]}
-EOF
-  selftest singbox "$d/c.json" "$p"
-  rc=$?
-  rm -rf "$d"
-  return $rc
-}
+proto_shadowtls_selftest() { selftest_client shadowtls; }
 
 proto_shadowtls_doctor() {
-  local sni
-  if proto_shadowtls_selftest; then
-    ok "$(t d_self_ok ShadowTLS)"
-  else
-    bad "$(t d_self_bad ShadowTLS)"
-    return 1
-  fi
-  sni=$(pget shadowtls sni)
-  if reality_check "$sni" >/dev/null || { sleep 2; reality_check "$sni" >/dev/null; }; then
-    ok "$(t d_stls_target_ok "$sni")"
-  else
-    bad "$(t d_stls_target_bad "$sni")"
-    hint "pbox change shadowtls sni auto"
-    return 1
-  fi
+  doctor_selftest shadowtls || return 1
+  d_reality_target shadowtls d_stls_target_ok d_stls_target_bad
 }

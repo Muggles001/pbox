@@ -118,11 +118,4 @@ EOF
   return $rc
 }
 
-proto_tuic_doctor() {
-  if proto_tuic_selftest; then
-    ok "$(t d_self_ok TUIC)"
-  else
-    bad "$(t d_self_bad TUIC)"
-    return 1
-  fi
-}
+proto_tuic_doctor() { doctor_selftest tuic; }
