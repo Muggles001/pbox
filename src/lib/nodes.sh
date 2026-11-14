@@ -31,11 +31,15 @@ node_each() {
   for id in $(protos_enabled); do
     for u in ${NODE_USER:-$(users_list)}; do
       user_has "$u" "$id" || continue
-      if declare -F "proto_${id//-/_}_hosts" >/dev/null; then pcall "$id" hosts; else node_hosts; fi | hosts_compact | while IFS= read -r line; do
+      {
+        if declare -F "proto_${id//-/_}_hosts" >/dev/null; then pcall "$id" hosts; else node_hosts; fi
+        relay_via_hosts "$id"
+      } | hosts_compact | while IFS= read -r line; do
         label="${line%%|*}" host="${line#*|}"
-        # 第三段是可选的附加信息，协议模块通过 NODE_EXTRA 读取
-        NODE_EXTRA=""
+        # 第三段是可选的附加信息，协议模块通过 NODE_EXTRA 读取；第四段是经中转时的端口对应关系
+        NODE_EXTRA="" NODE_VIA=""
         case "$host" in *"|"*) NODE_EXTRA="${host#*|}" host="${host%%|*}" ;; esac
+        case "$NODE_EXTRA" in *"|"*) NODE_VIA="${NODE_EXTRA#*|}" NODE_EXTRA="${NODE_EXTRA%%|*}" ;; esac
         name="$(pmeta "$id" short)-$label"
         [ -n "$region" ] && name="$region-$name"
         [ "$multi" = 1 ] && name="$name-$u"

@@ -36,7 +36,7 @@ core_cmd() {
 # 已启用的协议用到哪些内核
 cores_needed() {
   local id
-  for id in $(protos_enabled); do pmeta "$id" core; echo; done | sort -u
+  { for id in $(protos_enabled); do pmeta "$id" core; echo; done; relay_fwd_any && echo singbox; } | sort -u
   if site_on_p; then echo nginx; fi
 }
 

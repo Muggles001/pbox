@@ -118,6 +118,7 @@ pick_port() {
     for id in $(protos_enabled); do
       [ "$(pget "$id" port)" = "$p" ] && [ "$(pmeta "$id" l4)" = "$l4" ] && taken=1
     done
+    relay_fwd_ports | grep -qx "$p/$l4" && taken=1
     [ $taken = 0 ] && { echo "$p"; return 0; }
   done
   random_port "$l4"

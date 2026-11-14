@@ -24,15 +24,17 @@ d_config() {
 
 d_ports() {
   local id rc=0 l4 port
-  for id in $(protos_enabled); do
-    l4=$(pmeta "$id" l4) port=$(pget "$id" port)
+  while read -r l4 port; do
     if port_in_use "$l4" "$port"; then
       ok "$(t d_port_ok "$l4" "$port")"
     else
       bad "$(t d_port_bad "$l4" "$port")"
       rc=1
     fi
-  done
+  done < <(
+    for id in $(protos_enabled); do echo "$(pmeta "$id" l4) $(pget "$id" port)"; done
+    relay_fwd_ports | awk -F/ '{print $2, $1}'
+  )
   return $rc
 }
 
@@ -163,7 +165,7 @@ cmd_doctor() {
   local report="${1:-}" pass=0 total=0 out fn id
   need_installed
   out=$(mktemp)
-  for fn in d_services d_config d_ports d_firewall d_dns d_time d_egress d_domain d_site d_cdn; do
+  for fn in d_services d_config d_ports d_firewall d_dns d_time d_egress d_domain d_site d_cdn d_relay; do
     total=$((total + 1))
     if "$fn" >>"$out" 2>&1; then pass=$((pass + 1)); fi
   done

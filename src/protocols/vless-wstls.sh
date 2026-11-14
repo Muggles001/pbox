@@ -61,8 +61,8 @@ vless_wstls_name() { printf '%s' "${NODE_EXTRA:-$(gget tls_domain)}"; }
 proto_vless_wstls_share_link() {
   local p h
   p=$(pget vless-wstls path | sed 's#/#%2F#g') h=$(vless_wstls_name)
-  printf 'vless://%s@%s:443?encryption=none&security=tls&sni=%s&fp=%s&alpn=http%%2F1.1&type=ws&host=%s&path=%s#%s\n' \
-    "$(uget "$1" uuid)" "$(host_fmt "$2")" "$h" "$(fp_of vless-wstls)" "$h" "$p" "$3"
+  printf 'vless://%s@%s:%s?encryption=none&security=tls&sni=%s&fp=%s&alpn=http%%2F1.1&type=ws&host=%s&path=%s#%s\n' \
+    "$(uget "$1" uuid)" "$(host_fmt "$2")" "$(pubport vless-wstls)" "$h" "$(fp_of vless-wstls)" "$h" "$p" "$3"
 }
 
 proto_vless_wstls_client_singbox() {
@@ -73,7 +73,7 @@ proto_vless_wstls_client_singbox() {
       "type": "vless",
       "tag": "$3",
       "server": "$2",
-      "server_port": 443,
+      "server_port": $(pubport vless-wstls),
       "uuid": "$(uget "$1" uuid)",
       "tls": {"enabled": true, "server_name": "$h", "alpn": ["http/1.1"], "utls": {"enabled": true, "fingerprint": "$(fp_of vless-wstls)"}},
       "transport": {"type": "ws", "path": "$(pget vless-wstls path)", "headers": {"Host": "$h"}}
@@ -88,7 +88,7 @@ proto_vless_wstls_client_mihomo() {
   - name: "$3"
     type: vless
     server: "$2"
-    port: 443
+    port: $(pubport vless-wstls)
     uuid: "$(uget "$1" uuid)"
     network: ws
     udp: true

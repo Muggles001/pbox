@@ -41,6 +41,7 @@ ports_wanted() {
       echo "$(pget "$id" port)/$(pmeta "$id" l4)"
       [ "$(pmeta "$id" udp_too)" = 1 ] && echo "$(pget "$id" port)/udp"
     done
+    relay_fwd_ports
     r=$(pget hysteria2 hop_range)
     [ -n "$r" ] && echo "${r%-*}:${r#*-}/udp"
     # 分流开着时 443 由 Nginx 监听，不论 Reality 在不在 443

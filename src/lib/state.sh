@@ -63,10 +63,16 @@ fp_of() { pget "$1" fp chrome; }
 # 写进节点信息的端口。NAT 机器上监听的是内网端口，客户端要连的是商家转发出来的外网端口。
 # 挂在 443 分流后面的协议，对外永远是 443。
 pubport() {
-  local e
-  [ "$(pmeta "$1" behind)" = site ] && { printf 443; return 0; }
-  e=$(pget "$1" ext_port)
-  printf '%s' "${e:-$(pget "$1" port)}"
+  local e p m
+  if [ "$(pmeta "$1" behind)" = site ]; then
+    p=443
+  else
+    e=$(pget "$1" ext_port)
+    p="${e:-$(pget "$1" port)}"
+  fi
+  # 经中转机的节点：换成中转机上对应的端口（NODE_VIA 由 node_each 设置，见 relay.sh）
+  for m in ${NODE_VIA:-}; do [ "${m%%=*}" = "$p" ] && { p=${m#*=}; break; }; done
+  printf '%s' "$p"
 }
 
 proto_enabled() { [ -f "$CUR/protocols/$1.env" ]; }

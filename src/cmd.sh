@@ -210,7 +210,7 @@ edit_begin() {
   txn_begin
 }
 
-edit_end() {
+edit_end() { # [same]：本次改动不影响本机节点，不提示链接变化
   local id
   for id in $(protos_enabled); do
     [ -n "$(proto_users "$id")" ] || { txn_abort; die "$(t proto_no_user "$(pmeta "$id" title)")"; }
@@ -225,7 +225,7 @@ edit_end() {
   argo_apply || warn "$(t argo_fail)"
   sub_push || warn "$(t sub_push_fail)"
   say "${C_G}$(t applied)${C_0}"
-  note "$(t links_changed)"
+  [ "${1:-}" = same ] || note "$(t links_changed)"
 }
 
 cmd_add() {
@@ -519,6 +519,7 @@ pbox $PBOX_VERSION
   pbox sub [setup|show [NAME]|push|off]
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]
   pbox warp [on|off|all|domains a.com,b.com|status|test]
+  pbox relay [status|invite|forward CODE [NAME]|forward off NAME|via CODE [NAME]|via off NAME]
   pbox bbr [on|off|status]
   pbox domain [status|set DOMAIN [dns]|set ip|off|renew [force]]
   pbox site [status|on|off|source <builtin|https://URL>|cdn <SUBDOMAIN|off>]

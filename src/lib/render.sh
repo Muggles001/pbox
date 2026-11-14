@@ -21,11 +21,11 @@ EOF
       ;;
     singbox)
       # 日志只记致命错误：error 级别会把每个连接失败的来源 IP 写进日志，与"不记录客户端地址"相违
-      rules=""
+      rules=$(relay_route_rule)
       # Trojan 把密码不对的连接转给本机的伪装站，这条连接也要过路由：
       # 排在最前，免得被下面的私网拦截或 WARP 规则带走
       proto_enabled trojan &&
-        rules="{\"inbound\": [\"trojan\"], \"ip_cidr\": [\"127.0.0.1/32\"], \"port\": [$(gget site_plain_port)], \"action\": \"route\", \"outbound\": \"direct\"}"
+        rules="$rules${rules:+, }{\"inbound\": [\"trojan\"], \"ip_cidr\": [\"127.0.0.1/32\"], \"port\": [$(gget site_plain_port)], \"action\": \"route\", \"outbound\": \"direct\"}"
       [ "$block" = 1 ] && rules="$rules${rules:+, }{\"ip_is_private\": true, \"action\": \"reject\"}"
       extra=$(warp_rules_json)
       [ -n "$extra" ] && rules="$rules${rules:+, }$extra"
@@ -64,6 +64,7 @@ render_all() {
   for id in $(protos_enabled); do
     pcall "$id" render_inbound >"$out/$(core_dir "$(pmeta "$id" core)")/10_$id.json" || return 1
   done
+  relay_fwd_any && relay_render_inbounds >"$out/sing-box/20_relay.json"
   mkdir -p "$out"
 }
 

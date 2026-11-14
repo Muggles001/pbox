@@ -53,8 +53,8 @@ EOF
 proto_trojan_hosts() { echo "TLS|$(gget tls_domain)"; }
 
 proto_trojan_share_link() {
-  printf 'trojan://%s@%s:443?security=tls&sni=%s&fp=%s&type=tcp#%s\n' \
-    "$(uget "$1" password)" "$2" "$2" "$(fp_of trojan)" "$3"
+  printf 'trojan://%s@%s:%s?security=tls&sni=%s&fp=%s&type=tcp#%s\n' \
+    "$(uget "$1" password)" "$(host_fmt "$2")" "$(pubport trojan)" "$(gget tls_domain)" "$(fp_of trojan)" "$3"
 }
 
 proto_trojan_client_singbox() {
@@ -63,9 +63,9 @@ proto_trojan_client_singbox() {
       "type": "trojan",
       "tag": "$3",
       "server": "$2",
-      "server_port": 443,
+      "server_port": $(pubport trojan),
       "password": "$(uget "$1" password)",
-      "tls": {"enabled": true, "server_name": "$2", "utls": {"enabled": true, "fingerprint": "$(fp_of trojan)"}}
+      "tls": {"enabled": true, "server_name": "$(gget tls_domain)", "utls": {"enabled": true, "fingerprint": "$(fp_of trojan)"}}
     }
 EOF
 }
@@ -75,10 +75,10 @@ proto_trojan_client_mihomo() {
   - name: "$3"
     type: trojan
     server: "$2"
-    port: 443
+    port: $(pubport trojan)
     password: "$(uget "$1" password)"
     udp: true
-    sni: "$2"
+    sni: "$(gget tls_domain)"
     client-fingerprint: $(fp_of trojan)
 EOF
 }

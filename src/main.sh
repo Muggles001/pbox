@@ -37,6 +37,7 @@ main() {
     domain) cmd_domain "$@" ;;
     site) cmd_site "$@" ;;
     argo) cmd_argo "$@" ;;
+    relay) cmd_relay "$@" ;;
     firewall) cmd_firewall ;;
     rollback) cmd_rollback ;;
     log) cmd_log "$@" ;;

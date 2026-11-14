@@ -330,6 +330,7 @@ menu_settings() {
     printf "$T_m_fmt" 9 "$(t mset_bbr)" "${C_D}[$(onoff "$([ "$(bbr_cur)" = bbr ] && echo 1 || echo 0)")] $(t mset_bbr_d)${C_0}"
     printf "$T_m_fmt" d "$(t mset_domain)" "${C_D}[$(gget tls_domain -)] $(t mset_domain_d)${C_0}"
     printf "$T_m_fmt" n "$(t mset_compact)" "${C_D}[$(onoff "$(gget compact_nodes 0)")] $(t mset_compact_d)${C_0}"
+    printf "$T_m_fmt" r "$(t mset_relay)" "${C_D}[$(relay_keys fwd | wc -l | tr -d ' ')/$(relay_keys via | wc -l | tr -d ' ')] $(t mset_relay_d)${C_0}"
     item u m_uninstall m_uninstall_d
     item 0 m_back m_blank
     choose
@@ -366,12 +367,39 @@ menu_settings() {
         [ "$(gget compact_nodes 0)" = 1 ] && v=off
         run cmd_set compact-nodes "$v"
         ;;
+      r | R) menu_relay ;;
       u | U)
         echo
         (cmd_uninstall)
         [ -d "$STATE" ] || return 0
         pause
         ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
+# 粘贴时整行 "pbox relay forward <码>" 或只有码都可以：取最后一段
+menu_relay_code() { REPLY="${REPLY##* }"; }
+
+menu_relay() {
+  while :; do
+    menu_header "$(t mset_relay)"
+    (relay_status)
+    say ""
+    item 1 mr_invite mr_invite_d
+    item 2 mr_forward mr_forward_d
+    item 3 mr_via mr_via_d
+    item 4 mr_fwd_off m_blank
+    item 5 mr_via_off m_blank
+    item 0 m_back m_blank
+    choose
+    case "$REPLY" in
+      1) run cmd_relay invite ;;
+      2) ask " $(t mr_ask_code)" ""; menu_relay_code; [ -n "$REPLY" ] && run cmd_relay forward "$REPLY" ;;
+      3) ask " $(t mr_ask_code)" ""; menu_relay_code; [ -n "$REPLY" ] && run cmd_relay via "$REPLY" ;;
+      4) ask " $(t mr_ask_name)" ""; [ -n "$REPLY" ] && run cmd_relay forward off "$REPLY" ;;
+      5) ask " $(t mr_ask_name)" ""; [ -n "$REPLY" ] && run cmd_relay via off "$REPLY" ;;
       *) return 0 ;;
     esac
   done

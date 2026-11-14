@@ -436,6 +436,49 @@ check "SS 每个用户一个密钥" bash -c "bash dist/pbox.sh user add bob ss20
 check "换 XHTTP 的伪装目标和路径" bash -c "bash dist/pbox.sh change reality-xhttp sni www.example.net --yes && bash dist/pbox.sh change reality-xhttp path /p1 --yes && grep -q '\"target\": \"www.example.net:443\"' '$(E)/generated/xray/10_reality-xhttp.json' && grep -q '\"path\": \"/p1\"' '$(E)/generated/xray/10_reality-xhttp.json'"
 check "换 ShadowTLS 的握手对象" bash -c "bash dist/pbox.sh change shadowtls sni www.example.net --yes && grep -q 'host: \"www.example.net\"' '$(E)/nodes/mihomo.yaml'"
 
+echo "链式中转"
+new_root
+land="$PBOX_ROOT"
+export PBOX_TEST_REGION=HK
+pbox install --yes >/dev/null 2>&1
+pbox change hysteria2 hop on --yes >/dev/null 2>&1
+code=$(pbox relay invite 2>/dev/null | awk '/pbox relay forward/ {print $NF}')
+check "中转码只有地址和端口" test "$(printf %s "$code" | openssl base64 -d -A)" = "fwd|HK|203.0.113.10|443/tcp+udp"
+check "落地机上不能用自己的中转码" bash -c "! bash dist/pbox.sh relay forward '$code'"
+new_root
+relay="$PBOX_ROOT"
+export PBOX_TEST_IP4=198.51.100.20 PBOX_TEST_REGION=JP
+pbox install --yes >/dev/null 2>&1
+check "无效的中转码被拒绝" bash -c "! bash dist/pbox.sh relay forward abc && ! test -e '$(E)/state/relay.env'"
+code2=$(pbox relay forward "$code" 2>/dev/null | awk '/pbox relay via/ {print $NF}')
+rj="$(E)/generated/sing-box/20_relay.json"
+check "转发入站是合法 JSON" json_ok "$rj"
+check "443 被本机节点占着，转发改用别的端口，TCP 和 UDP 都转" bash -c "python3 -c 'import json,sys; i=json.load(open(sys.argv[1]))[\"inbounds\"][0]; sys.exit(not (i[\"type\"]==\"direct\" and i[\"listen_port\"]!=443 and \"network\" not in i and i[\"override_address\"]==\"203.0.113.10\" and i[\"override_port\"]==443))' '$rj'"
+check "转发的路由排在最前，不受私网拦截影响" bash -c "python3 -c 'import json,sys; r=json.load(open(sys.argv[1]))[\"route\"][\"rules\"][0]; sys.exit(not (r[\"inbound\"][0].startswith(\"relay-HK-\") and r[\"outbound\"]==\"direct\"))' '$(E)/generated/sing-box/00_base.json'"
+lp=$(printf %s "$code2" | openssl base64 -d -A | sed 's/.*=//')
+check "回传的中转码写着中转机的地址和端口" test "$(printf %s "$code2" | openssl base64 -d -A)" = "via|JP|198.51.100.20|443=$lp"
+check "转发的端口已放行" bash -c "grep -qx '$lp/tcp' <(PBOX_ROOT='$relay' bash -c '. dist/pbox.sh; CUR=\$STATE; ports_wanted') && grep -qx '$lp/udp' <(PBOX_ROOT='$relay' bash -c '. dist/pbox.sh; CUR=\$STATE; ports_wanted')"
+check "再运行一次沿用原来的端口" test "$(pbox relay forward "$code" 2>/dev/null | awk '/pbox relay via/ {print $NF}')" = "$code2"
+check "同名但指向别的机器时拒绝" bash -c "! bash dist/pbox.sh relay forward '$(printf %s 'fwd|HK|203.0.113.99|443/tcp' | openssl base64 -A)'"
+check "换个名字就可以" pbox relay forward "$(printf %s 'fwd|HK|203.0.113.99|443/tcp' | openssl base64 -A)" HK2
+export PBOX_ROOT="$land" PBOX_TEST_IP4=203.0.113.10 PBOX_TEST_REGION=HK
+check "落地机上不能用中转机给别人的码" bash -c "! bash dist/pbox.sh relay via '$code'"
+check "落地机加上中转" pbox relay via "$code2"
+check "经中转的节点用中转机的地址和端口" grep -q "@198.51.100.20:$lp?.*#HK-Reality-Via-JP" "$(E)/nodes/links.txt"
+check "经中转的 Hysteria2 不带端口跳跃，直连的仍带" bash -c "grep '#HK-Hysteria2-Via-JP' '$(E)/nodes/links.txt' | grep -vq mport && grep '#HK-Hysteria2-IPv4' '$(E)/nodes/links.txt' | grep -q mport"
+check "两种客户端配置里都有" bash -c "json_ok() { python3 -m json.tool \"\$1\"; }; json_ok '$(E)/nodes/sing-box.json' >/dev/null && grep -q '\"server_port\": $lp' '$(E)/nodes/sing-box.json' && grep -q 'HK-Reality-Via-JP' '$(E)/nodes/mihomo.yaml'"
+export PBOX_TEST_DNS_A=203.0.113.10
+pbox domain set w.example.com --yes >/dev/null 2>&1
+pbox site on --yes >/dev/null 2>&1
+pbox add trojan --yes >/dev/null 2>&1
+check "经中转的 Trojan 仍以自己的域名握手" grep -q "@198.51.100.20:$lp?security=tls&sni=w.example.com.*#HK-Trojan-Via-JP" "$(E)/nodes/links.txt"
+unset PBOX_TEST_DNS_A
+check "删除中转后经它的节点消失" bash -c "bash dist/pbox.sh relay via off JP >/dev/null && ! grep -q Via-JP '$(E)/nodes/links.txt'"
+export PBOX_ROOT="$relay" PBOX_TEST_IP4=198.51.100.20
+check "中转机删除转发" bash -c "bash dist/pbox.sh relay forward off HK >/dev/null && bash dist/pbox.sh relay forward off HK2 >/dev/null && ! test -e '$rj'"
+export PBOX_TEST_IP4=203.0.113.10
+unset PBOX_TEST_REGION
+
 echo "VLESS 的自定义选项"
 new_root
 PBOX_PROTOCOLS="reality-vision vless-ws" pbox install --yes >/dev/null 2>&1
