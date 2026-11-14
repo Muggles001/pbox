@@ -13,9 +13,13 @@ proto_trojan_meta() {
 }
 
 proto_trojan_plan() {
-  pset trojan port "$(random_port tcp)" || return 1
+  local p
+  p=$(random_port tcp) || return 1
+  pset trojan port "$p"
   # 伪装站在 Trojan 后面时，要一个不加密的入口接它转过来的连接
-  [ -n "$(gget site_plain_port)" ] || gset site_plain_port "$(random_port tcp)"
+  [ -n "$(gget site_plain_port)" ] && return 0
+  p=$(random_port tcp) || return 1
+  gset site_plain_port "$p"
 }
 
 proto_trojan_secrets() { :; }

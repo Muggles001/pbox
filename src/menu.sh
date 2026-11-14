@@ -88,10 +88,10 @@ menu_proto() {
     fi
     n=0 k_port=- k_sni="" k_ext=""
     if [ "$(pmeta "$id" behind)" != site ]; then n=1 k_port=1; item $n mp_port mp_port_d; fi
-    case "$id" in reality-vision | reality-xhttp | shadowtls) n=$((n + 1)) k_sni=$n; item $n mp_sni mp_sni_d ;; esac
+    if proto_opt "$id" sni; then n=$((n + 1)) k_sni=$n; item $n mp_sni mp_sni_d; fi
     if [ "$(gget nat 0)" = 1 ]; then n=$((n + 1)) k_ext=$n; item $n mp_ext mp_ext_d; fi
     k_cdn=""
-    if [ "$id" = vless-ws ] || { [ "$id" = vless-wstls ] && [ -n "$(gget cdn_host)" ]; }; then
+    if proto_opt "$id" cdn; then
       n=$((n + 1)) k_cdn=$n
       printf "$T_m_fmt" "$n" "$(t mp_cdn)" "${C_D}[$(pget "$id" cdn_addr "$(t off)")] $(t mp_cdn_d)${C_0}"
     fi
@@ -110,7 +110,7 @@ menu_proto() {
       n=$((n + 1)) k_obfs=$n
       printf "$T_m_fmt" "$n" "$(t mp_obfs)" "${C_D}[$(onoff "$([ -n "$(pget hysteria2 obfs_password)" ] && echo 1 || echo 0)")] $(t mp_obfs_d)${C_0}"
     fi
-    if [ "$id" = vless-ws ] || [ "$id" = vless-wstls ] || [ "$id" = reality-xhttp ]; then
+    if proto_opt "$id" path; then
       n=$((n + 1)) k_path=$n
       printf "$T_m_fmt" "$n" "$(t mp_path)" "${C_D}$(t mp_path_d)${C_0}"
     fi
@@ -126,7 +126,7 @@ menu_proto() {
       n=$((n + 1)) k_eport=$n
       printf "$T_m_fmt" "$n" "$(t mp_eport)" "${C_D}[$(vless_ws_eport)] $(t mp_eport_d)${C_0}"
     fi
-    if [ "$id" != hysteria2 ] && [ "$id" != tuic ] && [ "$id" != anytls ] && [ "$id" != ss2022 ] && [ "$id" != socks ]; then
+    if proto_opt "$id" fp; then
       n=$((n + 1)) k_fp=$n
       printf "$T_m_fmt" "$n" "$(t mp_fp)" "${C_D}[$(fp_of "$id")] $(t mp_fp_d)${C_0}"
     fi
@@ -370,11 +370,7 @@ menu_settings() {
         run cmd_bbr "$v"
         ;;
       d | D) menu_domain ;;
-      n | N)
-        v=on
-        [ "$(gget compact_nodes 0)" = 1 ] && v=off
-        run cmd_set compact-nodes "$v"
-        ;;
+      n | N) menu_compact ;;
       r | R) menu_relay ;;
       u | U)
         echo
@@ -408,6 +404,49 @@ menu_relay() {
       3) ask " $(t mr_ask_code)" ""; menu_relay_code; [ -n "$REPLY" ] && run cmd_relay via "$REPLY" ;;
       4) ask " $(t mr_ask_name)" ""; [ -n "$REPLY" ] && run cmd_relay forward off "$REPLY" ;;
       5) ask " $(t mr_ask_name)" ""; [ -n "$REPLY" ] && run cmd_relay via off "$REPLY" ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
+# 精简节点列表：开关，以及自选列出哪些协议
+menu_compact() {
+  local u rec id i ids picked
+  while :; do
+    menu_header "$(t mset_compact)"
+    u=$(users_list | head -1)
+    if [ "$(gget compact_nodes 0)" = 1 ]; then
+      rec=$(compact_pick "$u")
+      [ -n "$rec" ] || rec=$(protos_enabled | tr '\n' ' ')
+      printf '  %s%s%s\n' "$C_D" "$(t mc_now "$(for id in $rec; do pmeta "$id" title; done | awk 'NR > 1 { printf "、" } { printf "%s", $0 }')")$([ -n "$(gget compact_list)" ] && t mc_own || t mc_auto_tag)" "$C_0"
+    fi
+    printf "$T_m_fmt" 1 "$(t mc_toggle)" "${C_D}[$(onoff "$(gget compact_nodes 0)")]${C_0}"
+    item 2 mc_pick mc_pick_d
+    item 3 mc_auto mc_auto_d
+    item 0 m_back m_blank
+    choose
+    case "$REPLY" in
+      1) if [ "$(gget compact_nodes 0)" = 1 ]; then run cmd_set compact-nodes off; else run cmd_set compact-nodes on; fi ;;
+      2)
+        ids=$(protos_enabled | tr '\n' ' ')
+        rec=" $(compact_pick "$u") "
+        echo
+        i=0
+        for id in $ids; do
+          i=$((i + 1))
+          case "$rec" in *" $id "*) printf '  %2d. [x] %s\n' "$i" "$(pmeta "$id" title)" ;; *) printf '  %2d. [ ] %s\n' "$i" "$(pmeta "$id" title)" ;; esac
+        done
+        ask " $(t mc_ask_pick)" ""
+        [ -n "$REPLY" ] || continue
+        picked=""
+        for i in $(printf '%s' "$REPLY" | tr ',' ' '); do
+          id=$(printf '%s\n' $ids | sed -n "${i}p" 2>/dev/null)
+          [ -n "$id" ] || { warn "$(t mc_bad_pick "$i")"; pause; picked=""; break; }
+          picked="$picked${picked:+,}$id"
+        done
+        [ -n "$picked" ] && run cmd_set compact-nodes "$picked"
+        ;;
+      3) run cmd_set compact-nodes auto ;;
       *) return 0 ;;
     esac
   done

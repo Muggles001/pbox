@@ -170,16 +170,17 @@ EOF
   echo "}"
 }
 
-# 网站本身，以及 VLESS-WS-TLS 的隐蔽路径。加密和不加密的两个入口共用这一份。
+# 网站本身，以及 WS 协议的隐蔽路径。加密和不加密的两个入口共用这一份。
 site_locations() {
-  local src host site="${SITE_DIR#"$R"}"
+  local src host id site="${SITE_DIR#"$R"}"
   src=$(site_source)
-  if proto_enabled vless-wstls; then
+  for id in vless-wstls vmess; do
+    proto_enabled "$id" || continue
     # 路径对但不是 WebSocket 的请求（比如浏览器直接打开）按不存在的页面处理
     cat <<EOF
-    location = $(pget vless-wstls path) {
+    location = $(pget "$id" path) {
       if (\$http_upgrade != "websocket") { return 404; }
-      proxy_pass http://127.0.0.1:$(pget vless-wstls port);
+      proxy_pass http://127.0.0.1:$(pget "$id" port);
       proxy_http_version 1.1;
       proxy_set_header Upgrade \$http_upgrade;
       proxy_set_header Connection "upgrade";
@@ -188,7 +189,7 @@ site_locations() {
       proxy_send_timeout 1d;
     }
 EOF
-  fi
+  done
   if [ "$src" = builtin ]; then
     cat <<EOF
     root $site;
@@ -336,7 +337,7 @@ d_site() {
 # Cloudflare 免费证书的范围内，HTTPS 反而会失败；这里只读一段公开信息，不传任何数据。
 cf_proxied() {
   testing && { [ "${PBOX_TEST_CF:-0}" = 1 ]; return; }
-  curl -sL --max-time 10 "http://$1/cdn-cgi/trace" 2>/dev/null | grep -qx "h=$1"
+  curl -sL --max-time 10 "http://$1/cdn-cgi/trace" 2>/dev/null | grep -x "h=$1" >/dev/null
 }
 
 # 套 CDN 的子域名。它和直连用的域名分开：打开代理后这个名字解析到 Cloudflare，

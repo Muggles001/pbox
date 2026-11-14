@@ -24,7 +24,8 @@ proto_shadowtls_plan() {
   fi
   pset shadowtls port "$p"
   # 里面那层 Shadowsocks 只监听本机
-  pset shadowtls inner_port "$(random_port tcp)" || return 1
+  p=$(random_port tcp) || return 1
+  pset shadowtls inner_port "$p"
 }
 
 # 握手对象和 Reality 的伪装目标是同一类网站：要支持 TLS 1.3。直接用同一份实测过的名单。

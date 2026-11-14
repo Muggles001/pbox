@@ -130,7 +130,7 @@ EOF
     chmod 755 "$f"
     manifest_add file "$f"
     # /etc/periodic 由 crond 执行，有的系统模板没有让它开机运行
-    if ! rc-update show default 2>/dev/null | grep -qw crond; then
+    if ! rc-update show default 2>/dev/null | grep -w crond >/dev/null; then
       rc-update add crond default >/dev/null 2>&1 && manifest_add rc crond
     fi
     rc-service crond status >/dev/null 2>&1 || rc-service crond start >/dev/null 2>&1

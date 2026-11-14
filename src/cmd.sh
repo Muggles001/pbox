@@ -84,7 +84,7 @@ install_abort() {
 
 # 交互安装时可以自选协议和端口；直接回车就是推荐配置。
 install_customize() {
-  local id k picked=""
+  local id k d picked=""
   [ "$ASSUME_YES" = 1 ] && return 0
   [ -n "$(opt PROTOCOLS)" ] && return 0
   ask "$(t inst_mode)" ""
@@ -92,7 +92,9 @@ install_customize() {
   for id in $PROTO_ALL; do
     # 这些协议要先有域名和伪装站，装好之后再开
     [ "$(pmeta "$id" behind)" = site ] && continue
-    confirm "  $(t inst_enable_q "$(pmeta "$id" title)")" || continue
+    # 推荐的默认开，其余默认不开：一路回车得到的仍是推荐配置
+    case " $PRESET_RECOMMENDED " in *" $id "*) d=y ;; *) d=n ;; esac
+    confirm "  $(t inst_enable_q "$(pmeta "$id" title)")" "$d" || continue
     picked="$picked $id"
     case "$id" in
       reality-vision) k=PBOX_REALITY_PORT ;; hysteria2) k=PBOX_HY2_PORT ;; tuic) k=PBOX_TUIC_PORT ;; anytls) k=PBOX_ANYTLS_PORT ;;
@@ -167,6 +169,8 @@ cmd_install() {
   say ""
   say "${C_G}$(t install_done)${C_0}"
   nodes_show
+  say "  ${C_D}$(t install_more)${C_0}"
+  say ""
   cmd_doctor || true
 }
 
@@ -275,11 +279,10 @@ cmd_change() {
       ;;
     cdn)
       # 优选地址：客户端改连这个地址，再由 Cloudflare 送回自己的隧道或机器
-      case "$id" in
-        vless-ws) ;;
-        vless-wstls) [ -n "$(gget cdn_host)" ] || { txn_abort; die "$(t cdn_pref_need_host)"; } ;;
-        *) txn_abort; die "$(t change_usage)" ;;
-      esac
+      if ! proto_opt "$id" cdn; then
+        txn_abort
+        case "$id" in vless-wstls | vmess) die "$(t cdn_pref_need_host)" ;; *) die "$(t change_usage)" ;; esac
+      fi
       case "$val" in
         off | auto | none) val="" ;;
         *) valid_domain "$val" || printf '%s' "$val" | grep -Eq '^[0-9a-fA-F:.]+$' || { txn_abort; die "$(t bad_domain "$val")"; } ;;
@@ -309,16 +312,21 @@ cmd_change() {
       esac
       ;;
     path)
-      case "$id" in vless-ws | vless-wstls | reality-xhttp) ;; *) txn_abort; die "$(t change_usage)" ;; esac
+      proto_opt "$id" path || { txn_abort; die "$(t change_usage)"; }
       case "$val" in
         auto) val="/$(rand_str "$(rand_int 8 16)")" ;;
         /*) printf '%s' "$val" | grep -Eq '^/[A-Za-z0-9_/-]{1,64}$' || { txn_abort; die "$(t bad_path)"; } ;;
         *) txn_abort; die "$(t bad_path)" ;;
       esac
+      # 伪装站上的两个 WS 协议共用网站，路径不能相同
+      case "$id" in
+        vless-wstls) [ "$val" != "$(pget vmess path)" ] || { txn_abort; die "$(t path_taken)"; } ;;
+        vmess) [ "$val" != "$(pget vless-wstls path)" ] || { txn_abort; die "$(t path_taken)"; } ;;
+      esac
       pset "$id" path "$val"
       ;;
     fp)
-      case "$id" in reality-vision | vless-ws | trojan | vless-wstls | reality-xhttp | shadowtls) ;; *) txn_abort; die "$(t change_usage)" ;; esac
+      proto_opt "$id" fp || { txn_abort; die "$(t change_usage)"; }
       case " $FP_CHOICES " in *" $val "*) pset "$id" fp "$val" ;; *) txn_abort; die "$(t bad_fp "$FP_CHOICES")" ;; esac
       ;;
     edge-port)
@@ -343,7 +351,7 @@ cmd_change() {
       gset nat 1
       ;;
     sni)
-      case "$id" in reality-vision | reality-xhttp | shadowtls) ;; *) txn_abort; die "$(t change_usage)" ;; esac
+      proto_opt "$id" sni || { txn_abort; die "$(t change_usage)"; }
       if [ "$val" = auto ]; then
         say "$(t reality_picking)"
         val=$(reality_pick) || { txn_abort; die "$(t reality_none)"; }
@@ -419,7 +427,17 @@ cmd_set() {
       case "$val" in on) gset update_check 1 ;; off) gset update_check 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
       ;;
     compact-nodes)
-      case "$val" in on) gset compact_nodes 1 ;; off) gset compact_nodes 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
+      # on/off 只是开关，保留自选的名单；auto 回到自动挑选；其余当作协议名单
+      case "$val" in
+        on) gset compact_nodes 1 ;;
+        off) gset compact_nodes 0 ;;
+        auto) gset compact_nodes 1 && gset compact_list "" ;;
+        *)
+          user_protos_parse "${*:2}" && [ -n "$REPLY" ] || { txn_abort; die "$(t user_bad_protos "$PROTO_ALL")"; }
+          gset compact_nodes 1
+          gset compact_list "$REPLY"
+          ;;
+      esac
       ;;
     block-private)
       case "$val" in
@@ -512,20 +530,20 @@ pbox $PBOX_VERSION
   pbox change <proto> ext-port <n>
   pbox change hysteria2 hop <on|off|A-B>
   pbox change hysteria2 obfs <on|off>
-  pbox change <vless-ws|vless-wstls|reality-xhttp> path <auto|/xxx>
+  pbox change <vless-ws|vless-wstls|vmess|reality-xhttp> path <auto|/xxx>
   pbox change tuic cc <bbr|cubic|new_reno>
-  pbox change socks allow <IP,网段,...|any>
-  pbox change <vless-ws|vless-wstls> cdn <addr|off>
+  pbox change socks allow <IP,CIDR,...|any>
+  pbox change <vless-ws|vless-wstls|vmess> cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
   pbox change <reality-vision|reality-xhttp|shadowtls> sni <domain|auto>
   pbox change reality-vision keys
-  pbox change <reality-vision|vless-ws|trojan|vless-wstls|reality-xhttp|shadowtls> fp <chrome|firefox|safari|ios|android|edge|random>
+  pbox change <reality-vision|vless-ws|trojan|vless-wstls|vmess|reality-xhttp|shadowtls> fp <chrome|firefox|safari|ios|android|edge|random>
   pbox change vless-ws edge-port <443|2053|2083|2087|2096|8443>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]
   pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
-  pbox set compact-nodes <on|off>
+  pbox set compact-nodes <on|off|auto|PROTOCOLS>
   pbox user [list|add NAME [PROTOCOLS]|protocols NAME <LIST|all>|del NAME|show NAME|reset NAME]
   pbox sub [setup|show [NAME]|push|off]
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]

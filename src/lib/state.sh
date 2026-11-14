@@ -60,6 +60,18 @@ proto_users() { # <协议> → 能用它的用户
 FP_CHOICES="chrome firefox safari ios android edge random"
 fp_of() { pget "$1" fp chrome; }
 
+# 哪个协议有哪个可调项。命令和菜单都问这里，新增协议时只改这一处
+proto_opt() { # <协议> <sni|path|fp|cdn>
+  case "$2" in
+    sni) case "$1" in reality-vision | reality-xhttp | shadowtls) return 0 ;; esac ;;
+    path) case "$1" in vless-ws | vless-wstls | vmess | reality-xhttp) return 0 ;; esac ;;
+    fp) case "$1" in reality-vision | vless-ws | trojan | vless-wstls | vmess | reality-xhttp | shadowtls) return 0 ;; esac ;;
+    # 伪装站上的 WS 要先设了套 CDN 的子域名才有优选可言
+    cdn) case "$1" in vless-ws) return 0 ;; vless-wstls | vmess) [ -n "$(gget cdn_host)" ] && return 0 ;; esac ;;
+  esac
+  return 1
+}
+
 # 写进节点信息的端口。NAT 机器上监听的是内网端口，客户端要连的是商家转发出来的外网端口。
 # 挂在 443 分流后面的协议，对外永远是 443。
 pubport() {

@@ -116,9 +116,12 @@ pick_port() {
     port_in_use "$l4" "$p" && continue
     taken=0
     for id in $(protos_enabled); do
-      [ "$(pget "$id" port)" = "$p" ] && [ "$(pmeta "$id" l4)" = "$l4" ] && taken=1
+      [ "$(pget "$id" port)" = "$p" ] || continue
+      [ "$(pmeta "$id" l4)" = "$l4" ] && taken=1
+      [ "$l4" = udp ] && [ "$(pmeta "$id" udp_too)" = 1 ] && taken=1
     done
-    relay_fwd_ports | grep -qx "$p/$l4" && taken=1
+    # 不用 grep -q，理由同 port_in_use
+    relay_fwd_ports | grep -x "$p/$l4" >/dev/null && taken=1
     [ $taken = 0 ] && { echo "$p"; return 0; }
   done
   random_port "$l4"

@@ -32,7 +32,10 @@ d_ports() {
       rc=1
     fi
   done < <(
-    for id in $(protos_enabled); do echo "$(pmeta "$id" l4) $(pget "$id" port)"; done
+    for id in $(protos_enabled); do
+      echo "$(pmeta "$id" l4) $(pget "$id" port)"
+      [ "$(pmeta "$id" udp_too)" = 1 ] && echo "udp $(pget "$id" port)"
+    done
     relay_fwd_ports | awk -F/ '{print $2, $1}'
   )
   return $rc

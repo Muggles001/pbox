@@ -47,6 +47,7 @@ check "本机比线上新时不提示" vn_not v0.2.0 0.3.0
 
 echo "安装（推荐档）"
 new_root
+check "自选协议时一路回车，只开推荐的" bash -c "R=\$(mktemp -d) && { printf 'c\\n'; yes ''; } | head -60 | PBOX_ROOT=\$R bash dist/pbox.sh install >/dev/null 2>&1; [ \"\$(ls \$R/etc/pbox/state/protocols | tr '\\n' ' ')\" = 'hysteria2.env reality-vision.env ' ]"
 check "无人值守安装成功" pbox install --yes
 check "Reality 用 TCP 443" grep -qx 'port=443' "$(E)/state/protocols/reality-vision.env"
 check "Hysteria2 用 UDP 443" grep -qx 'port=443' "$(E)/state/protocols/hysteria2.env"
@@ -160,6 +161,7 @@ check "入站只监听本机" grep -q '"listen": "127.0.0.1"' "$(E)/generated/si
 check "链接用隧道域名作地址和 Host" grep -q '@example-test.trycloudflare.com:443?.*host=example-test.trycloudflare.com.*#.*Argo-Temp$' "$(E)/nodes/links.txt"
 check "设置优选后多出一个优选节点，直连的仍保留" bash -c "bash dist/pbox.sh change vless-ws cdn www.visa.com.sg --yes && grep -q '@www.visa.com.sg:443?.*sni=example-test.trycloudflare.com.*Argo-Temp-Pref' '$(E)/nodes/links.txt' && grep -q '@example-test.trycloudflare.com:443.*Argo-Temp\$' '$(E)/nodes/links.txt'"
 check "加上固定隧道后共四个 Argo 节点" bash -c "PBOX_ARGO_TOKEN=eyJhIjoiMTIzNDU2Nzg5MGFiY2RlZiJ9 bash dist/pbox.sh argo fixed t.example.org --yes && test \"\$(grep -c Argo- '$(E)/nodes/links.txt')\" -eq 4 && grep -q 'sni=t.example.org.*Argo-Fixed-Pref' '$(E)/nodes/links.txt'"
+check "精简时固定隧道和临时隧道各列一个，都用优选" bash -c "bash dist/pbox.sh set compact-nodes on --yes && l='$(E)/nodes/links.txt' && [ \"\$(grep -c Argo- \$l)\" = 2 ] && grep -q 'Argo-Fixed-Pref\$' \$l && grep -q 'Argo-Temp-Pref\$' \$l && bash dist/pbox.sh set compact-nodes off --yes"
 check "令牌不出现在生成的节点和内核配置里" bash -c "! grep -rq eyJhIjoi '$(E)/nodes' '$(E)/generated'"
 check "交互设置：先填令牌、再填域名" bash -c "printf 'eyJhIjoiYWJjZGVmMTIzNDU2Nzg5MCJ9\nt2.example.org\n' | bash dist/pbox.sh argo fixed >'$PBOX_ROOT/out.txt' 2>&1 && grep -q 'sni=t2.example.org' '$(E)/nodes/links.txt' && grep -q 'localhost:' '$PBOX_ROOT/out.txt'"
 check "非法令牌被拒绝" bash -c "! PBOX_ARGO_TOKEN='bad token' bash dist/pbox.sh argo fixed t.example.org --yes"
@@ -412,10 +414,39 @@ check "优选节点连优选地址，握手仍写子域名" bash -c "bash dist/p
 check "优选地址可以是 IPv6" bash -c "bash dist/pbox.sh change vless-wstls cdn 2606:4700::1 --yes && grep -q '^vless://.*@\[2606:4700::1\]:443?' '$(E)/nodes/links.txt'"
 check "精简后只列推荐协议，每个一个节点，兜底用优选" bash -c "bash dist/pbox.sh set compact-nodes on --yes && l='$(E)/nodes/links.txt' && [ \$(grep -c . \$l) = 3 ] && grep -q 'Reality-IPv4\$' \$l && grep -q 'Hysteria2-IPv4\$' \$l && grep -q 'WS-CDN-Pref\$' \$l && ! grep -q 'Trojan' '$(E)/nodes/mihomo.yaml' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null"
 check "精简时体检仍测全部协议" bash -c "bash dist/pbox.sh doctor 2>&1 | grep -q Trojan"
+check "自选列出的协议，开关时保留名单" bash -c "l='$(E)/nodes/links.txt' && bash dist/pbox.sh set compact-nodes trojan,hysteria2 --yes && [ \$(grep -c . \$l) = 2 ] && grep -q 'Trojan-' \$l && grep -q 'Hysteria2-IPv4\$' \$l && bash dist/pbox.sh set compact-nodes off --yes && bash dist/pbox.sh set compact-nodes on --yes && [ \$(grep -c . \$l) = 2 ] && grep -qx 'compact_list=trojan hysteria2' '$(E)/state/global.env'"
+check "自选名单里有不认识的协议时拒绝" bash -c "! bash dist/pbox.sh set compact-nodes reality-vision,nope --yes"
+check "恢复自动挑选" bash -c "bash dist/pbox.sh set compact-nodes auto --yes && [ \$(grep -c . '$(E)/nodes/links.txt') = 3 ]"
 check "精简时主力没有就由下一个顶上" bash -c "bash dist/pbox.sh user add carol trojan,vless-wstls --yes && l='$(E)/nodes/links.txt' && [ \$(grep -c -- '-carol\$' \$l) = 2 ] && grep -q 'Trojan-.*-carol\$' \$l && grep -q 'WS-CDN-Pref-carol\$' \$l && bash dist/pbox.sh user del carol --yes"
 check "关掉精简后恢复" bash -c "bash dist/pbox.sh set compact-nodes off --yes && grep -q 'WS-CDN\$' '$(E)/nodes/links.txt'"
 check "设着子域名时不能关伪装站" bash -c "bash dist/pbox.sh del trojan --yes && bash dist/pbox.sh del vless-wstls --yes && ! bash dist/pbox.sh site off --yes"
 check "停用后分流和节点里都没有子域名" bash -c "bash dist/pbox.sh add vless-wstls --yes && bash dist/pbox.sh site cdn off --yes && ! grep -q 'c.example.com' '$(E)/generated/nginx/nginx.conf' && ! grep -q 'c.example.com' '$(E)/nodes/links.txt'"
+unset PBOX_TEST_DNS_A
+
+echo "VMess-WS-TLS"
+new_root
+PBOX_PROTOCOLS="reality-vision" pbox install --yes >/dev/null 2>&1
+export PBOX_TEST_DNS_A=203.0.113.10
+pbox domain set w.example.com --yes >/dev/null 2>&1
+check "没开伪装站时不能加" bash -c "! bash dist/pbox.sh add vmess --yes"
+pbox site on --yes >/dev/null 2>&1
+check "加上 VMess" pbox add vmess --yes
+check "VMess 只听本机，alterId 为 0" bash -c "python3 -c 'import json,sys; i=json.load(open(sys.argv[1]))[\"inbounds\"][0]; sys.exit(not (i[\"type\"]==\"vmess\" and i[\"listen\"]==\"127.0.0.1\" and i[\"users\"][0][\"alterId\"]==0 and i[\"transport\"][\"type\"]==\"ws\"))' '$(E)/generated/sing-box/10_vmess.json'"
+check "VMess 链接是 v2rayN 的写法，经 443 和域名握手" bash -c "python3 -c 'import base64,json,sys
+l=[x for x in open(sys.argv[1]) if x.startswith(\"vmess://\")][0].strip()
+j=json.loads(base64.b64decode(l[8:]))
+i=json.load(open(sys.argv[2]))[\"inbounds\"][0]
+sys.exit(not (j[\"add\"]==\"w.example.com\" and j[\"port\"]==\"443\" and j[\"tls\"]==\"tls\" and j[\"sni\"]==\"w.example.com\" and j[\"net\"]==\"ws\" and j[\"aid\"]==\"0\" and j[\"path\"]==i[\"transport\"][\"path\"] and j[\"id\"]==i[\"users\"][0][\"uuid\"] and j[\"ps\"].endswith(\"VMess-TLS\")))' '$(E)/nodes/links.txt' '$(E)/generated/sing-box/10_vmess.json'"
+check "VMess 在两种客户端配置里" bash -c "python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null && grep -q '\"type\": \"vmess\"' '$(E)/nodes/sing-box.json' && grep -q 'type: vmess' '$(E)/nodes/mihomo.yaml'"
+check "和 VLESS-WS-TLS 各有一个隐蔽路径" bash -c "bash dist/pbox.sh add vless-wstls --yes && vp=\$(sed -n 's/^path=//p' '$(E)/state/protocols/vmess.env') && wp=\$(sed -n 's/^path=//p' '$(E)/state/protocols/vless-wstls.env') && [ \"\$vp\" != \"\$wp\" ] && grep -q \"location = \$vp \" '$(E)/generated/nginx/nginx.conf' && grep -q \"location = \$wp \" '$(E)/generated/nginx/nginx.conf'"
+check "两个 WS 协议不能用同一个路径" bash -c "bash dist/pbox.sh change vmess path /same1 --yes && ! bash dist/pbox.sh change vless-wstls path /same1 --yes"
+check "开着 VMess 时不能关伪装站" bash -c "bash dist/pbox.sh del vless-wstls --yes && ! bash dist/pbox.sh site off --yes"
+check "没设子域名时不能设优选" bash -c "! bash dist/pbox.sh change vmess cdn www.visa.com.sg --yes"
+check "设了子域名和优选后多出经 CDN 的节点" bash -c "bash dist/pbox.sh site cdn c.example.com --yes && bash dist/pbox.sh change vmess cdn www.visa.com.sg --yes && grep -c '^vmess://' '$(E)/nodes/links.txt' | grep -qx 3"
+check "精简时 VMess 做兜底，只列优选" bash -c "bash dist/pbox.sh set compact-nodes on --yes && python3 -c 'import base64,json,sys
+v=[json.loads(base64.b64decode(x.strip()[8:])) for x in open(sys.argv[1]) if x.startswith(\"vmess://\")]
+sys.exit(not (len(v)==1 and v[0][\"add\"]==\"www.visa.com.sg\" and v[0][\"sni\"]==\"c.example.com\" and v[0][\"host\"]==\"c.example.com\"))' '$(E)/nodes/links.txt' && bash dist/pbox.sh add vless-wstls --yes && ! grep -q '^vmess://' '$(E)/nodes/links.txt' && bash dist/pbox.sh set compact-nodes off --yes"
+check "后开的 WS 协议沿用已设的优选地址" grep -qx 'cdn_addr=www.visa.com.sg' "$(E)/state/protocols/vless-wstls.env"
 unset PBOX_TEST_DNS_A
 
 echo "Shadowsocks 2022、ShadowTLS、Reality-XHTTP"
@@ -499,6 +530,7 @@ check "经中转的 Trojan 仍以自己的域名握手" grep -q "@198.51.100.20:
 unset PBOX_TEST_DNS_A
 check "删除中转后经它的节点消失" bash -c "bash dist/pbox.sh relay via off JP >/dev/null && ! grep -q Via-JP '$(E)/nodes/links.txt'"
 export PBOX_ROOT="$relay" PBOX_TEST_IP4=198.51.100.20
+check "新协议挑端口时避开转发占用的端口" bash -c "bash dist/pbox.sh relay forward '$(printf %s 'fwd|HK3|203.0.113.50|8443/tcp 2053/tcp 2083/udp' | openssl base64 -A)' >/dev/null && bash dist/pbox.sh add anytls --yes >/dev/null && grep -qx 'port=2083' '$(E)/state/protocols/anytls.env' && bash dist/pbox.sh relay forward off HK3 >/dev/null"
 check "中转机删除转发" bash -c "bash dist/pbox.sh relay forward off HK >/dev/null && bash dist/pbox.sh relay forward off HK2 >/dev/null && ! test -e '$rj'"
 export PBOX_TEST_IP4=203.0.113.10
 unset PBOX_TEST_REGION

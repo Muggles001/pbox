@@ -66,7 +66,7 @@ render_all() {
   for id in $(protos_enabled); do
     pcall "$id" render_inbound >"$out/$(core_dir "$(pmeta "$id" core)")/10_$id.json" || return 1
   done
-  relay_fwd_any && relay_render_inbounds >"$out/sing-box/20_relay.json"
+  relay_fwd_any && relay_render_inbounds >"$out/$(core_dir singbox)/20_relay.json"
   mkdir -p "$out"
 }
 
