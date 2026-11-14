@@ -6,7 +6,7 @@
 
 ## 上手
 
-1. 准备一台 VPS（Debian 12+、Ubuntu 22.04+ 或 Alpine），用 SSH 以 root 登录。
+1. 准备一台 VPS（Debian 12+、Ubuntu 22.04+、Rocky / AlmaLinux 9+ 或 Alpine），用 SSH 以 root 登录。Alpine 默认没有 bash 和 curl，先运行 `apk add bash curl`。
 2. 运行安装命令：
 
    ```bash

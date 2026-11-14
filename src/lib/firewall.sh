@@ -12,11 +12,8 @@ fw_backend() {
 
 fw_is_open() { # <后端> <端口/协议>，端口可以是 起:止
   case "$1" in
-    firewalld) firewall-cmd --query-port="$(printf '%s' "$2" | tr : -)" >/dev/null 2>&1; return ;;
-  esac
-  case "$1" in
     ufw) ufw status | grep -Eq "^${2}[[:space:]]+ALLOW" ;;
-    firewalld) firewall-cmd --query-port="$2" >/dev/null 2>&1 ;;
+    firewalld) firewall-cmd --query-port="$(printf '%s' "$2" | tr : -)" >/dev/null 2>&1 ;;
     *) return 0 ;;
   esac
 }

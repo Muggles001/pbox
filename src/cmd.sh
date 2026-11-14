@@ -179,6 +179,7 @@ do_uninstall() {
     grep '^svc	' "$MANIFEST" | cut -f2 | while read -r val; do svc_remove "$val"; done
     grep '^fw	' "$MANIFEST" | cut -f2 | while read -r val; do fw_close "${val% *}" "${val#* }"; done
     grep -q '^hop	' "$MANIFEST" && hop_clear
+    grep '^rc	' "$MANIFEST" | cut -f2 | while read -r val; do rc-update del "$val" default >/dev/null 2>&1; done
     grep -E '^(file|dir|user)	' "$MANIFEST" | while IFS='	' read -r kind val; do
       case "$kind" in
         file) rm -f "$val" ;;

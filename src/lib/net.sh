@@ -47,6 +47,8 @@ have_ipv6_stack() {
 listen_addr() { if have_ipv6_stack; then echo "::"; else echo "0.0.0.0"; fi; }
 
 # port_in_use <tcp|udp> <端口>
+# 由 awk 读完全部输出再判断，不用 grep -q：它匹配到就退出，busybox 的 netstat 逐行输出，
+# 下一行写进已关闭的管道会收到 SIGPIPE，在 pipefail 下整条管道被当成失败。
 port_in_use() {
   local l4="$1" n="$2" f
   if testing; then
@@ -55,10 +57,10 @@ port_in_use() {
   fi
   if has ss; then
     [ "$l4" = tcp ] && f=-lnt || f=-lnu
-    ss -H "$f" 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]$n\$"
+    ss -H "$f" 2>/dev/null | awk -v p="$n" '$4 ~ "[:.]" p "$" {f = 1} END {exit !f}'
   elif has netstat; then
     [ "$l4" = tcp ] && f=-lnt || f=-lnu
-    netstat "$f" 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]$n\$"
+    netstat "$f" 2>/dev/null | awk -v p="$n" '$4 ~ "[:.]" p "$" {f = 1} END {exit !f}'
   else
     return 1
   fi

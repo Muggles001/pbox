@@ -52,6 +52,7 @@ detect_sys() {
   case "$OS_ID" in
     debian | ubuntu) PKG=apt ;;
     alpine) PKG=apk ;;
+    rocky | almalinux | rhel) PKG=dnf ;;
     *) die "$(t os_unsupported "${OS_ID:-?}")" ;;
   esac
   if has systemctl && [ -d /run/systemd/system ]; then
@@ -72,6 +73,7 @@ pkg_install() {
   case "$PKG" in
     apt) apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" ;;
     apk) apk add --no-cache "$@" ;;
+    dnf) dnf install -y -q "$@" ;;
     *) return 1 ;;
   esac
 }
@@ -79,7 +81,9 @@ pkg_install() {
 ensure_deps() {
   local c miss=""
   for c in curl tar unzip openssl; do has "$c" || miss="$miss $c"; done
-  if ! has ss && ! has netstat; then miss="$miss iproute2"; fi
+  if ! has ss && ! has netstat; then
+    if [ "$PKG" = dnf ]; then miss="$miss iproute"; else miss="$miss iproute2"; fi
+  fi
   [ -z "$miss" ] && return 0
   say "$(t deps_missing "$miss")"
   confirm "$(t deps_install_q)" || die "$(t deps_declined)"
@@ -155,7 +159,13 @@ svc() {
   fi
 }
 
+# 开着 SELinux 时，systemd 直接启动的 /usr/local/lib 下的程序留在受限的 init_t 域里，连外网都会被拦；
+# Nginx 则会被套上 httpd_t 的规则。经 /usr/bin/env 启动，系统策略会把它转入 unconfined_service_t，
+# 与装在 /usr/local/bin 的普通服务待遇相同。不改文件标签，也不改 SELinux 规则。
+exec_prefix() { [ -f /sys/fs/selinux/enforce ] && printf '/usr/bin/env '; return 0; }
+
 # svc_write <服务名> <启动命令> [支持热重载 0|1] [额外的一行服务设置]
+# 额外设置按 systemd 的写法给出；OpenRC 下只认 EnvironmentFile= 和 ExecStartPost=+，换成等效的写法。
 # 内核以专用账号运行，只保留绑定低位端口的能力；日志写文件，便于单独清空。
 svc_write() {
   local n="$1" cmd="$2" rel="${3:-0}" extra="${4:-}" f before
@@ -181,7 +191,7 @@ Wants=network-online.target
 User=$RUN_USER
 Group=$RUN_USER
 WorkingDirectory=$VARDIR
-ExecStart=$cmd
+ExecStart=$(exec_prefix)$cmd
 EOF
       [ "$rel" = 1 ] && echo 'ExecReload=/bin/kill -HUP $MAINPID'
       [ -n "$extra" ] && echo "$extra"
@@ -221,6 +231,11 @@ output_log="$LOGDIR/$n.log"
 error_log="$LOGDIR/$n.log"
 depend() { need net; }
 EOF
+    case "$extra" in
+      # 逐行导出而不执行，文件里的值不会被当成命令
+      EnvironmentFile=*) printf 'start_pre() {\n  while IFS= read -r l; do case "$l" in [A-Z]*=*) export "$l" ;; esac; done <%s\n}\n' "${extra#EnvironmentFile=}" >>"$f" ;;
+      ExecStartPost=+*) printf 'start_post() {\n  %s\n}\n' "${extra#ExecStartPost=+}" >>"$f" ;;
+    esac
     chmod 755 "$f"
   fi
   # 服务文件有变化时，热重载不够，调用方必须重启才能让新的运行环境生效

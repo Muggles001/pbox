@@ -25,9 +25,22 @@ hop_active() {
 
 hop_unit() { # <on|off>
   local f=/etc/systemd/system/pbox-hop.service
-  [ "$INIT" = systemd ] || return 0
   if [ "$1" = off ]; then
-    [ -f "$f" ] && svc_remove pbox-hop
+    { [ -f "$f" ] || [ -f /etc/init.d/pbox-hop ]; } && svc_remove pbox-hop
+    return 0
+  fi
+  if [ "$INIT" = openrc ]; then
+    f=/etc/init.d/pbox-hop
+    cat >"$f" <<EOF
+#!/sbin/openrc-run
+description="pbox port hopping rules"
+depend() { need net; after firewall; }
+start() { $LIBDIR/pbox.sh hop-apply; }
+EOF
+    chmod 755 "$f"
+    svc enable pbox-hop
+    manifest_add svc pbox-hop
+    manifest_add file "$f"
     return 0
   fi
   cat >"$f" <<EOF
@@ -39,7 +52,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=$LIBDIR/pbox.sh hop-apply
+ExecStart=$(exec_prefix)$LIBDIR/pbox.sh hop-apply
 
 [Install]
 WantedBy=multi-user.target
@@ -134,7 +147,14 @@ hop_set() {
       ;;
   esac
   [ "$(gget nat 0)" = 1 ] && { txn_abort; die "$(t hop_nat)"; }
-  testing || has nft || has iptables || { txn_abort; die "$(t hop_no_tool)"; }
+  # 精简的系统模板里两个都没有，像其他依赖一样问过再装
+  if ! testing && ! has nft && ! has iptables; then
+    say "$(t deps_missing " nftables")"
+    if ! confirm "$(t deps_install_q)" || ! pkg_install nftables >/dev/null 2>&1 || ! has nft; then
+      txn_abort
+      die "$(t hop_no_tool)"
+    fi
+  fi
   # H3：跳跃范围不能盖住其他 UDP 协议或它自己的监听端口
   if id=$(hop_overlaps "$a" "$b"); then
     txn_abort

@@ -48,7 +48,7 @@ nginx_ensure() {
   if [ $had = 0 ] || { ! nginx_stream_builtin && [ -z "$(nginx_stream_mod)" ]; }; then
     case "$PKG" in
       apt) pk="nginx libnginx-mod-stream" ;;
-      apk) pk="nginx nginx-mod-stream" ;;
+      apk | dnf) pk="nginx nginx-mod-stream" ;;
       *) return 1 ;;
     esac
     say "$(t deps_missing " $pk")"

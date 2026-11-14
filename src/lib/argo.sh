@@ -83,7 +83,7 @@ argo_apply() {
     # 用 HTTP/2 连 Cloudflare，不依赖 UDP 出站。
     # 开机自启时由服务自己触发一次同步（放到后台，不阻塞启动）；域名变了节点才会跟着更新。
     svc_write pbox-argo "$(argo_bin) tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:$port --metrics 127.0.0.1:$mp" 0 \
-      "ExecStartPost=+/bin/sh -c 'nohup $LIBDIR/pbox.sh argo-sync >/dev/null 2>&1 &'"
+      "ExecStartPost=+$(exec_prefix)/bin/sh -c 'nohup $LIBDIR/pbox.sh argo-sync >/dev/null 2>&1 &'"
     svc enable pbox-argo
     if ! svc active pbox-argo; then svc start pbox-argo; elif [ "${UNIT_CHANGED:-0}" = 1 ]; then svc restart pbox-argo; fi
     argo_sync
