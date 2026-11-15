@@ -26,16 +26,7 @@ proto_reality_xhttp_plan() {
   pset reality-xhttp path "/$(rand_str "$(rand_int 8 16)")"
 }
 
-proto_reality_xhttp_secrets() {
-  local sni keys
-  reality_sni_choose XHTTP_SNI
-  sni=$REPLY
-  keys=$(gen_reality_keypair) || die "$(t keygen_fail)"
-  pset reality-xhttp sni "$sni"
-  pset reality-xhttp private_key "$(printf '%s\n' "$keys" | sed -n 1p)"
-  pset reality-xhttp public_key "$(printf '%s\n' "$keys" | sed -n 2p)"
-  pset reality-xhttp short_id "$(rand_hex "$(rand_int 2 8)")"
-}
+proto_reality_xhttp_secrets() { reality_secrets reality-xhttp XHTTP_SNI; }
 
 proto_reality_xhttp_render_inbound() {
   local u users="" sep=""

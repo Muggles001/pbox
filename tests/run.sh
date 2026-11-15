@@ -470,6 +470,14 @@ check "精简时不列冷门协议；只有冷门协议的用户照常列出" ba
 check "换 XHTTP 的伪装目标和路径" bash -c "bash dist/pbox.sh change reality-xhttp sni www.example.net --yes && bash dist/pbox.sh change reality-xhttp path /p1 --yes && grep -q '\"target\": \"www.example.net:443\"' '$(E)/generated/xray/10_reality-xhttp.json' && grep -q '\"path\": \"/p1\"' '$(E)/generated/xray/10_reality-xhttp.json'"
 check "换 ShadowTLS 的握手对象" bash -c "bash dist/pbox.sh change shadowtls sni www.example.net --yes && grep -q 'host: \"www.example.net\"' '$(E)/nodes/mihomo.yaml'"
 
+echo "Reality-gRPC"
+new_root
+check "装上 Reality-gRPC，不占 Reality 的 443" bash -c "PBOX_PROTOCOLS='reality-vision reality-grpc' bash dist/pbox.sh install --yes && grep -qx port=443 '$(E)/state/protocols/reality-vision.env' && grep -qx port=8443 '$(E)/state/protocols/reality-grpc.env'"
+check "入站是 Reality 加 gRPC，不带 Vision 流控" bash -c "python3 -c 'import json,sys; i=json.load(open(sys.argv[1]))[\"inbounds\"][0]; sys.exit(not (i[\"tls\"][\"reality\"][\"enabled\"] and i[\"transport\"][\"type\"]==\"grpc\" and len(i[\"transport\"][\"service_name\"])>=8 and \"flow\" not in i[\"users\"][0]))' '$(E)/generated/sing-box/10_reality-grpc.json'"
+check "与 Reality-Vision 各用各的密钥" bash -c "[ \"\$(sed -n 's/^private_key=//p' '$(E)/state/protocols/reality-grpc.env')\" != \"\$(sed -n 's/^private_key=//p' '$(E)/state/protocols/reality-vision.env')\" ]"
+check "链接、sing-box、Clash 三种配置里都有" bash -c "svc=\$(sed -n 's/^service=//p' '$(E)/state/protocols/reality-grpc.env') && grep -q \"^vless://.*:8443?.*security=reality.*type=grpc&serviceName=\$svc&mode=gun#gRPC-IPv4\" '$(E)/nodes/links.txt' && ! grep '#gRPC-' '$(E)/nodes/links.txt' | grep -q flow= && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null && grep -q \"\\\"service_name\\\": \\\"\$svc\\\"\" '$(E)/nodes/sing-box.json' && grep -q \"grpc-service-name: \\\"\$svc\\\"\" '$(E)/nodes/mihomo.yaml'"
+check "换伪装目标和握手特征" bash -c "bash dist/pbox.sh change reality-grpc sni www.example.net --yes && bash dist/pbox.sh change reality-grpc fp firefox --yes && grep 'sni=www.example.net.*fp=firefox' '$(E)/nodes/links.txt' | grep '#gRPC-IPv4' >/dev/null"
+
 echo "SOCKS5"
 new_root
 check "装上 SOCKS5" bash -c "PBOX_PROTOCOLS='reality-vision socks' bash dist/pbox.sh install --yes"

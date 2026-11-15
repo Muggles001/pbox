@@ -130,3 +130,15 @@ d_reality_target() { # <协议> <通过的文案> <不通过的文案>
     return 1
   fi
 }
+
+# Reality 系协议的初始密钥：伪装目标、密钥对、短标识
+reality_secrets() { # <协议> <伪装目标的选项名>
+  local keys
+  reality_sni_choose "$2"
+  keys=$(gen_reality_keypair) || die "$(t keygen_fail)"
+  pset "$1" sni "$REPLY"
+  pset "$1" private_key "$(printf '%s\n' "$keys" | sed -n 1p)"
+  pset "$1" public_key "$(printf '%s\n' "$keys" | sed -n 2p)"
+  # 短标识的长度也随机：2 到 8 字节
+  pset "$1" short_id "$(rand_hex "$(rand_int 2 8)")"
+}

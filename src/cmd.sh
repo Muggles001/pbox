@@ -98,7 +98,7 @@ install_customize() {
     picked="$picked $id"
     case "$id" in
       reality-vision) k=PBOX_REALITY_PORT ;; hysteria2) k=PBOX_HY2_PORT ;; tuic) k=PBOX_TUIC_PORT ;; anytls) k=PBOX_ANYTLS_PORT ;;
-      reality-xhttp) k=PBOX_XHTTP_PORT ;; shadowtls) k=PBOX_STLS_PORT ;; ss2022) k=PBOX_SS_PORT ;; socks) k=PBOX_SOCKS_PORT ;; *) k="" ;;
+      reality-grpc) k=PBOX_GRPC_PORT ;; reality-xhttp) k=PBOX_XHTTP_PORT ;; shadowtls) k=PBOX_STLS_PORT ;; ss2022) k=PBOX_SS_PORT ;; socks) k=PBOX_SOCKS_PORT ;; *) k="" ;;
     esac
     [ -n "$k" ] || continue
     ask "  $(t inst_port_q)" ""
@@ -536,9 +536,9 @@ pbox $PBOX_VERSION
   pbox change socks allow <IP,CIDR,...|any>
   pbox change <vless-ws|vless-wstls|vmess> cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
-  pbox change <reality-vision|reality-xhttp|shadowtls> sni <domain|auto>
+  pbox change <reality-vision|reality-grpc|reality-xhttp|shadowtls> sni <domain|auto>
   pbox change reality-vision keys
-  pbox change <reality-vision|vless-ws|trojan|vless-wstls|vmess|reality-xhttp|shadowtls> fp <chrome|firefox|safari|ios|android|edge|random>
+  pbox change <reality-vision|vless-ws|trojan|vless-wstls|vmess|reality-grpc|reality-xhttp|shadowtls> fp <chrome|firefox|safari|ios|android|edge|random>
   pbox change vless-ws edge-port <443|2053|2083|2087|2096|8443>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]

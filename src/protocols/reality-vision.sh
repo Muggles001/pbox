@@ -23,17 +23,7 @@ proto_reality_vision_plan() {
   pset reality-vision port "$p"
 }
 
-proto_reality_vision_secrets() {
-  local sni keys
-  reality_sni_choose REALITY_SNI
-  sni=$REPLY
-  keys=$(gen_reality_keypair) || die "$(t keygen_fail)"
-  pset reality-vision sni "$sni"
-  pset reality-vision private_key "$(printf '%s\n' "$keys" | sed -n 1p)"
-  pset reality-vision public_key "$(printf '%s\n' "$keys" | sed -n 2p)"
-  # 短标识的长度也随机：2 到 8 字节
-  pset reality-vision short_id "$(rand_hex "$(rand_int 2 8)")"
-}
+proto_reality_vision_secrets() { reality_secrets reality-vision REALITY_SNI; }
 
 proto_reality_vision_render_inbound() {
   local u users="" sep=""

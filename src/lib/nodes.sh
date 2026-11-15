@@ -26,7 +26,7 @@ compact_pick() { # <用户>
       case " $pick " in *" $id "*) user_has "$1" "$id" && rec="$rec $id" ;; esac
     done
   else
-    for role in "reality-vision trojan anytls reality-xhttp" "hysteria2 tuic" "vless-wstls vmess" "vless-ws"; do
+    for role in "reality-vision trojan anytls reality-grpc reality-xhttp" "hysteria2 tuic" "vless-wstls vmess" "vless-ws"; do
       for id in $role; do
         proto_enabled "$id" && user_has "$1" "$id" || continue
         # 没有套 CDN 时，伪装站上的 WS 是直连的，不算兜底
