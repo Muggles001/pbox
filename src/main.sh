@@ -25,6 +25,7 @@ main() {
     nodes) cmd_nodes "$@" ;;
     qr) need_root; need_installed; nodes_qr ;;
     doctor) need_root; detect_sys; cmd_doctor "$@" ;;
+    fix) cmd_fix ;;
     add) cmd_add "$@" ;;
     del) cmd_del "$@" ;;
     change) cmd_change "$@" ;;

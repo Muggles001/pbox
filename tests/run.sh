@@ -470,6 +470,16 @@ check "精简时不列冷门协议；只有冷门协议的用户照常列出" ba
 check "换 XHTTP 的伪装目标和路径" bash -c "bash dist/pbox.sh change reality-xhttp sni www.example.net --yes && bash dist/pbox.sh change reality-xhttp path /p1 --yes && grep -q '\"target\": \"www.example.net:443\"' '$(E)/generated/xray/10_reality-xhttp.json' && grep -q '\"path\": \"/p1\"' '$(E)/generated/xray/10_reality-xhttp.json'"
 check "换 ShadowTLS 的握手对象" bash -c "bash dist/pbox.sh change shadowtls sni www.example.net --yes && grep -q 'host: \"www.example.net\"' '$(E)/nodes/mihomo.yaml'"
 
+echo "连不上向导"
+new_root
+PBOX_PROTOCOLS="reality-vision hysteria2 anytls" pbox install --yes >/dev/null 2>&1
+check "给出一条命令测完所有 TCP 端口，不含 UDP 协议" bash -c "bash dist/pbox.sh fix --yes | grep -q 'for p in 443 8443; do nc -vz -w 5 203.0.113.10 \\\$p; done'"
+check "有端口不通：确认后把那个协议换到新端口，别的不动" bash -c "printf '2\n8443\ny\n' | bash dist/pbox.sh fix >/dev/null 2>&1; ! grep -qx port=8443 '$(E)/state/protocols/anytls.env' && grep -qx port=443 '$(E)/state/protocols/reality-vision.env'"
+check "不确认就不改" bash -c "printf '2\n443\n\n' | bash dist/pbox.sh fix >/dev/null 2>&1; grep -qx port=443 '$(E)/state/protocols/reality-vision.env'"
+check "全都不通：开 Argo 隧道节点" bash -c "printf '3\ny\n' | bash dist/pbox.sh fix >/dev/null 2>&1; test -f '$(E)/state/protocols/vless-ws.env' && grep -q Argo- '$(E)/nodes/links.txt'"
+check "已有 Argo 时只指路，不重复开" bash -c "printf '3\n' | bash dist/pbox.sh fix 2>&1 | grep '名字里带 Argo' >/dev/null"
+check "都通：给出客户端一侧的检查步骤，不改配置" bash -c "before=\$(cat '$(E)/nodes/links.txt'); printf '1\n' | bash dist/pbox.sh fix 2>&1 | grep '时间要准' >/dev/null && [ \"\$before\" = \"\$(cat '$(E)/nodes/links.txt')\" ]"
+
 echo "Reality-gRPC"
 new_root
 check "装上 Reality-gRPC，不占 Reality 的 443" bash -c "PBOX_PROTOCOLS='reality-vision reality-grpc' bash dist/pbox.sh install --yes && grep -qx port=443 '$(E)/state/protocols/reality-vision.env' && grep -qx port=8443 '$(E)/state/protocols/reality-grpc.env'"

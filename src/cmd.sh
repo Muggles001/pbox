@@ -553,7 +553,7 @@ pbox $PBOX_VERSION
   pbox bbr [on|off|status]
   pbox domain [status|set DOMAIN [dns]|set ip|off|renew [force]]
   pbox site [status|on|off|source <builtin|https://URL>|cdn <SUBDOMAIN|off>]
-  pbox firewall   pbox rollback   pbox log [clear]
+  pbox fix   pbox firewall   pbox rollback   pbox log [clear]
   pbox backup [FILE]   pbox restore FILE
   pbox update   pbox uninstall   pbox lang
 

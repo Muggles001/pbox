@@ -628,6 +628,7 @@ cmd_menu() {
     menu_header
     item 1 m_nodes m_nodes_d
     item 2 m_doctor m_doctor_d
+    item f m_fix m_fix_d
     item 3 m_protocols m_protocols_d
     item 4 m_users m_users_d
     item 5 m_sub m_sub_d
@@ -640,6 +641,7 @@ cmd_menu() {
     case "$REPLY" in
       1) run cmd_nodes ;;
       2) run cmd_doctor ;;
+      f | F) run cmd_fix ;;
       3) menu_protocols ;;
       4) menu_users ;;
       5) menu_sub ;;
