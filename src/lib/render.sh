@@ -1,20 +1,35 @@
 # 直接列出私网网段，不依赖内核附带的地址库文件（本项目不安装它）
 PRIVATE_CIDRS='"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10", "fc00::/7", "fe80::/10", "::1/128"'
 
+# 加密 DNS：内核自己经 HTTPS 去问公共解析器，服务商的解析器看不到查询记录。
+# 只改内核的出站解析，不动系统设置。用 IP 作地址，免得解析器自己的域名还要先解析一次
+dns_doh_ip() {
+  case "$(gget dns)" in
+    cloudflare) echo 1.1.1.1 ;;
+    google) echo 8.8.8.8 ;;
+    quad9) echo 9.9.9.9 ;;
+  esac
+}
+
+block_bt_on() { [ "$(gget block_bt 0)" = 1 ]; }
+
 core_render_base() {
-  local rules extra block
-  block=$(gget block_private 1)
+  local rules extra block doh
+  block=$(gget block_private 1) doh=$(dns_doh_ip)
   case "$1" in
     xray)
+      rules=""
+      [ "$block" = 1 ] && rules=$(printf '{"type": "field", "ip": [%s], "outboundTag": "block"}' "$PRIVATE_CIDRS")
+      block_bt_on && rules="$rules${rules:+, }{\"type\": \"field\", \"protocol\": [\"bittorrent\"], \"outboundTag\": \"block\"}"
       cat <<EOF
 {
-  "log": {"loglevel": "error", "access": "none"},
+  "log": {"loglevel": "error", "access": "none"},$([ -n "$doh" ] && printf '\n  "dns": {"servers": ["https://%s/dns-query"]},' "$doh")
   "outbounds": [
-    {"tag": "direct", "protocol": "freedom"},
+    {"tag": "direct", "protocol": "freedom"$([ -n "$doh" ] && printf ', "settings": {"domainStrategy": "UseIP"}')},
     {"tag": "block", "protocol": "blackhole"}
   ],
   "routing": {
-    "rules": [$([ "$block" = 1 ] && printf '{"type": "field", "ip": [%s], "outboundTag": "block"}' "$PRIVATE_CIDRS")]
+    "rules": [$rules]
   }
 }
 EOF
@@ -29,15 +44,18 @@ EOF
       extra=$(socks_allow_rule)
       [ -n "$extra" ] && rules="$extra${rules:+, }$rules"
       [ "$block" = 1 ] && rules="$rules${rules:+, }{\"ip_is_private\": true, \"action\": \"reject\"}"
+      # 认出 BT、按域名分流都要先嗅探：客户端可能只发来 IP 和一串字节
       extra=$(warp_rules_json)
+      if block_bt_on || [ -n "$extra" ]; then rules="$rules${rules:+, }{\"action\": \"sniff\"}"; fi
+      block_bt_on && rules="$rules${rules:+, }{\"protocol\": \"bittorrent\", \"action\": \"reject\"}"
       [ -n "$extra" ] && rules="$rules${rules:+, }$extra"
       cat <<EOF
 {
-  "log": {"level": "fatal", "timestamp": true},
+  "log": {"level": "fatal", "timestamp": true},$([ -n "$doh" ] && printf '\n  "dns": {"servers": [{"type": "https", "tag": "dns-doh", "server": "%s"}], "final": "dns-doh"},' "$doh")
   "outbounds": [
     {"type": "direct", "tag": "direct"}
   ],$(warp_endpoint_json)
-  "route": {
+  "route": {$([ -n "$doh" ] && printf '\n    "default_domain_resolver": "dns-doh",')
     "rules": [$rules]$(warp_final_json)
   }
 }

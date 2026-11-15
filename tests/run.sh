@@ -470,6 +470,24 @@ check "精简时不列冷门协议；只有冷门协议的用户照常列出" ba
 check "换 XHTTP 的伪装目标和路径" bash -c "bash dist/pbox.sh change reality-xhttp sni www.example.net --yes && bash dist/pbox.sh change reality-xhttp path /p1 --yes && grep -q '\"target\": \"www.example.net:443\"' '$(E)/generated/xray/10_reality-xhttp.json' && grep -q '\"path\": \"/p1\"' '$(E)/generated/xray/10_reality-xhttp.json'"
 check "换 ShadowTLS 的握手对象" bash -c "bash dist/pbox.sh change shadowtls sni www.example.net --yes && grep -q 'host: \"www.example.net\"' '$(E)/nodes/mihomo.yaml'"
 
+echo "访问限制：屏蔽 BT 与加密 DNS"
+new_root
+PBOX_PROTOCOLS="reality-vision reality-xhttp" pbox install --yes >/dev/null 2>&1
+sb="$(E)/generated/sing-box/00_base.json"
+xr="$(E)/generated/xray/00_base.json"
+check "默认不嗅探、不改解析" bash -c "! grep -q sniff '$sb' && ! grep -q '\"dns\"' '$sb' && ! grep -q '\"dns\"' '$xr' && ! grep -q sniffing '$(E)/generated/xray/10_reality-xhttp.json'"
+check "屏蔽 BT：两个内核都先嗅探再拦截，排在私网拦截之后" bash -c "bash dist/pbox.sh set block-bt on --yes && python3 -c 'import json,sys
+r=json.load(open(sys.argv[1]))[\"route\"][\"rules\"]
+x=json.load(open(sys.argv[2]))
+i=json.load(open(sys.argv[3]))[\"inbounds\"][0]
+sys.exit(not (r[0].get(\"ip_is_private\") and r[1]==dict(action=\"sniff\") and r[2]==dict(protocol=\"bittorrent\",action=\"reject\") and x[\"routing\"][\"rules\"][-1][\"protocol\"]==[\"bittorrent\"] and i[\"sniffing\"][\"routeOnly\"]))' '$sb' '$xr' '$(E)/generated/xray/10_reality-xhttp.json'"
+check "和 WARP 按网站分流一起开时只嗅探一次" bash -c "bash dist/pbox.sh warp on --yes && [ \$(grep -o '\"action\": \"sniff\"' '$sb' | wc -l) = 1 ] && python3 -m json.tool '$sb' >/dev/null && bash dist/pbox.sh warp off --yes"
+check "加密 DNS：两个内核的出站解析都改走 HTTPS" bash -c "bash dist/pbox.sh set dns cloudflare --yes && python3 -c 'import json,sys
+s=json.load(open(sys.argv[1])); x=json.load(open(sys.argv[2]))
+sys.exit(not (s[\"dns\"][\"servers\"][0]==dict(type=\"https\",tag=\"dns-doh\",server=\"1.1.1.1\") and s[\"route\"][\"default_domain_resolver\"]==\"dns-doh\" and x[\"dns\"][\"servers\"]==[\"https://1.1.1.1/dns-query\"] and x[\"outbounds\"][0][\"settings\"][\"domainStrategy\"]==\"UseIP\"))' '$sb' '$xr'"
+check "不认识的解析器被拒绝" bash -c "! bash dist/pbox.sh set dns 1.2.3.4 --yes"
+check "都关掉后回到原样" bash -c "bash dist/pbox.sh set dns system --yes && bash dist/pbox.sh set block-bt off --yes && ! grep -q sniff '$sb' && ! grep -q '\"dns\"' '$sb' && ! grep -q '\"dns\"' '$xr' && python3 -m json.tool '$xr' >/dev/null"
+
 echo "连不上向导"
 new_root
 PBOX_PROTOCOLS="reality-vision hysteria2 anytls" pbox install --yes >/dev/null 2>&1

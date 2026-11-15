@@ -450,6 +450,16 @@ cmd_set() {
           ;;
       esac
       ;;
+    block-bt)
+      case "$val" in on) gset block_bt 1 ;; off) gset block_bt 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
+      ;;
+    dns)
+      case "$val" in
+        system | off) gset dns "" ;;
+        cloudflare | google | quad9) gset dns "$val" ;;
+        *) txn_abort; die "$(t set_usage)" ;;
+      esac
+      ;;
     block-private)
       case "$val" in
         on) gset block_private 1 ;;
@@ -555,6 +565,7 @@ pbox $PBOX_VERSION
   pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
   pbox set compact-nodes <on|off|auto|PROTOCOLS>
+  pbox set block-bt <on|off>   pbox set dns <system|cloudflare|google|quad9>
   pbox user [list|add NAME [PROTOCOLS]|protocols NAME <LIST|all>|del NAME|show NAME|reset NAME]
   pbox sub [setup|show [NAME]|push|off]
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]

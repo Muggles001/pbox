@@ -84,8 +84,8 @@ warp_rules_json() {
     list="$list$sep\"$d\""
     sep=", "
   done
-  # 先嗅探出域名：客户端可能只发来 IP，嗅探后才能按域名分流
-  printf '{"action": "sniff"}, {"domain_suffix": [%s], "outbound": "warp"}' "$list"
+  # 这条规则前面要有嗅探，由 core_render_base 统一加
+  printf '{"domain_suffix": [%s], "outbound": "warp"}' "$list"
 }
 
 warp_final_json() {

@@ -330,7 +330,7 @@ menu_settings() {
     item 1 mset_reset mset_reset_d
     printf "$T_m_fmt" 2 "$(t mset_addr)" "${C_D}[$(gget addr_mode split)]${C_0}"
     printf "$T_m_fmt" 3 "$(t mset_region)" "${C_D}[$(gget region -)]${C_0}"
-    printf "$T_m_fmt" 4 "$(t mset_block)" "${C_D}[$(onoff "$(gget block_private 1)")]${C_0}"
+    item 4 mset_limits mset_limits_d
     printf "$T_m_fmt" 5 "$(t mset_upd)" "${C_D}[$(onoff "$(gget update_check 1)")]${C_0}"
     item 6 mset_fw mset_fw_d
     item 7 mset_lang mset_lang_d
@@ -349,11 +349,7 @@ menu_settings() {
         ask " $(t mset_ask_region)" "auto"
         run cmd_set region "$REPLY"
         ;;
-      4)
-        v=on
-        [ "$(gget block_private 1)" = 1 ] && v=off
-        run cmd_set block-private "$v"
-        ;;
+      4) menu_limits ;;
       5)
         v=on
         [ "$(gget update_check 1)" = 1 ] && v=off
@@ -404,6 +400,36 @@ menu_relay() {
       3) ask " $(t mr_ask_code)" ""; menu_relay_code; [ -n "$REPLY" ] && run cmd_relay via "$REPLY" ;;
       4) ask " $(t mr_ask_name)" ""; [ -n "$REPLY" ] && run cmd_relay forward off "$REPLY" ;;
       5) ask " $(t mr_ask_name)" ""; [ -n "$REPLY" ] && run cmd_relay via off "$REPLY" ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
+# 访问限制：节点不许做什么，以及解析经谁
+menu_limits() {
+  local v
+  while :; do
+    menu_header "$(t mset_limits)"
+    printf "$T_m_fmt" 1 "$(t mset_block)" "${C_D}[$(onoff "$(gget block_private 1)")] $(t mset_block_d)${C_0}"
+    printf "$T_m_fmt" 2 "$(t mset_bt)" "${C_D}[$(onoff "$(gget block_bt 0)")] $(t mset_bt_d)${C_0}"
+    printf "$T_m_fmt" 3 "$(t mset_dns)" "${C_D}[$(gget dns system)] $(t mset_dns_d)${C_0}"
+    item 0 m_back m_blank
+    choose
+    case "$REPLY" in
+      1)
+        v=on
+        [ "$(gget block_private 1)" = 1 ] && v=off
+        run cmd_set block-private "$v"
+        ;;
+      2)
+        v=on
+        [ "$(gget block_bt 0)" = 1 ] && v=off
+        run cmd_set block-bt "$v"
+        ;;
+      3)
+        ask " $(t mset_ask_dns)" "system"
+        run cmd_set dns "$REPLY"
+        ;;
       *) return 0 ;;
     esac
   done
