@@ -40,7 +40,9 @@ cmd_update() {
   need_root
   need_installed
   [ -n "$PBOX_REPO" ] || die "$(t upd_norepo)"
+  spin_start "$(t spin_wait)"
   tag=$(update_latest_tag) || tag=""
+  spin_stop
   [ -n "$tag" ] || die "$(t upd_fail)"
   # 手动检查的结果也记下来，菜单里的提示随之更新
   kv_set "$LIBDIR/update.cache" time "$(date +%s)" 2>/dev/null
@@ -53,7 +55,9 @@ cmd_update() {
     confirm "$(t upd_q)" || die "$(t cancelled)"
     base="https://github.com/$PBOX_REPO/releases/download/$tag"
     tmp=$(mktemp -d)
+    spin_start "$(t spin_wait)"
     fetch -o "$tmp/pbox.sh" "$base/pbox.sh" && fetch -o "$tmp/sum" "$base/pbox.sh.sha256" || { rm -rf "$tmp"; die "$(t upd_fail)"; }
+    spin_stop
     want=$(awk '{print $1}' "$tmp/sum")
     [ "$(sha256_of "$tmp/pbox.sh")" = "$want" ] || { rm -rf "$tmp"; die "$(t upd_hash)"; }
     bash -n "$tmp/pbox.sh" || { rm -rf "$tmp"; die "$(t upd_hash)"; }

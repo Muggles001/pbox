@@ -92,7 +92,9 @@ cores_ensure() {
     core_fetch "$core" "$tmp" &
     pids="$pids $!"
   done
+  spin_start "$(t spin_wait)"
   for p in $pids; do wait "$p" || fail=1; done
+  spin_stop
   if [ "$fail" = 1 ]; then rm -rf "$tmp"; return 1; fi
   mkdir -p "$BINDIR/previous"
   manifest_add dir "$LIBDIR"

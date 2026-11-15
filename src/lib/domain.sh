@@ -180,6 +180,7 @@ domain_issue() { # <域名> <http|dns> [附加名字] [令牌] [force]
     acme_ensure || die "$(t dl_abort)"
     acme_ensure_dns || die "$(t dl_abort)"
     say "$(t dom_issuing_dns)"
+    spin_start "$(t spin_wait)"
     # shellcheck disable=SC2086
     CF_Token="$tok" acme --issue --dns dns_cf -d "$dom" $extra --server "$(acme_server)" --keylength ec-256 --log "$log" >/dev/null 2>&1
     rc=$?
@@ -193,10 +194,12 @@ domain_issue() { # <域名> <http|dns> [附加名字] [令牌] [force]
     be=$(fw_backend)
     [ -n "$be" ] && { fw_is_open "$be" 80/tcp || fw_open "$be" 80/tcp; }
     say "$(t dom_issuing)"
+    spin_start "$(t spin_wait)"
     # shellcheck disable=SC2086
     acme --issue --standalone -d "$dom" $extra --server "$(acme_server)" --keylength ec-256 --log "$log" >/dev/null 2>&1
     rc=$?
   fi
+  spin_stop
   [ $rc = 0 ] && return 0
   # 不强制重签时，已经签过且尚未到期 acme.sh 返回"跳过"，这不算失败
   [ "${5:-}" != force ] && [ -f "$ACME_CONF/${dom}_ecc/fullchain.cer" ]

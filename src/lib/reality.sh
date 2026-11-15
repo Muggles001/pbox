@@ -113,7 +113,9 @@ reality_sni_choose() { # <选项名，如 REALITY_SNI>
     reality_check "$REPLY" >/dev/null || die "$(t reality_bad_target "$REPLY")"
   else
     say "$(t reality_picking)"
+    spin_start "$(t spin_wait)"
     REPLY=$(reality_pick) || die "$(t reality_none)"
+    spin_stop
   fi
 }
 

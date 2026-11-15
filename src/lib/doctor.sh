@@ -195,21 +195,24 @@ d_external() {
 }
 
 cmd_doctor() {
-  local report="${1:-}" pass=0 total=0 out fn id
+  local report="${1:-}" pass=0 total=0 out fn id all
   need_installed
   out=$(mktemp)
-  for fn in d_services d_config d_ports d_firewall d_dns d_time d_egress d_domain d_site d_cdn d_relay; do
+  all="d_services d_config d_ports d_firewall d_dns d_time d_egress d_domain d_site d_cdn d_relay"
+  for id in $(protos_enabled); do all="$all proto:$id"; done
+  [ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && all="$all d_warp"
+  # 结果要等全部做完才一起显示，中间一分钟左右没有输出，所以报一下进度
+  # shellcheck disable=SC2086
+  set -- $all
+  for fn in "$@"; do
     total=$((total + 1))
-    if "$fn" >>"$out" 2>&1; then pass=$((pass + 1)); fi
+    spin_start "$(t spin_doctor "$total" "$#")"
+    case "$fn" in
+      proto:*) if pcall "${fn#proto:}" doctor >>"$out" 2>&1; then pass=$((pass + 1)); fi ;;
+      *) if "$fn" >>"$out" 2>&1; then pass=$((pass + 1)); fi ;;
+    esac
   done
-  for id in $(protos_enabled); do
-    total=$((total + 1))
-    if pcall "$id" doctor >>"$out" 2>&1; then pass=$((pass + 1)); fi
-  done
-  if [ "$(kv_get "$STATE/outbound.env" warp off)" = on ]; then
-    total=$((total + 1))
-    if d_warp >>"$out" 2>&1; then pass=$((pass + 1)); fi
-  fi
+  spin_stop
   d_resources >>"$out"
   d_ssh >>"$out"
   d_external >>"$out"

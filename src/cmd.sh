@@ -161,11 +161,15 @@ cmd_install() {
     # 放在子进程里：其中任何一步失败都回到这里，按清单撤销已做的改动
     (pcall "$id" secrets) || install_abort "$(t secrets_fail "$(pmeta "$id" title)")"
   done
+  spin_start "$(t spin_apply)"
   txn_commit || install_abort "$(t apply_fail)"
   self_install
+  spin_stop
   fw_sync
+  spin_start "$(t spin_nodes)"
   nodes_write
   argo_apply || warn "$(t argo_fail)"
+  spin_stop
   say ""
   say "${C_G}$(t install_done)${C_0}"
   nodes_show
@@ -221,13 +225,17 @@ edit_end() { # [same]：本次改动不影响本机节点，不提示链接变�
   done
   conflict_check
   cores_ensure || { txn_abort; die "$(t dl_abort)"; }
+  [ "$DRY_RUN" = 1 ] || spin_start "$(t spin_apply)"
   txn_commit || die "$(t apply_fail)"
   [ "$DRY_RUN" = 1 ] && return 0
   hop_apply || warn "$(t hop_fail)"
+  spin_stop
   fw_sync
+  spin_start "$(t spin_nodes)"
   nodes_write
   argo_apply || warn "$(t argo_fail)"
   sub_push || warn "$(t sub_push_fail)"
+  spin_stop
   say "${C_G}$(t applied)${C_0}"
   [ "${1:-}" = same ] || note "$(t links_changed)"
   relay_missing_note
@@ -355,7 +363,9 @@ cmd_change() {
       proto_opt "$id" sni || { txn_abort; die "$(t change_usage)"; }
       if [ "$val" = auto ]; then
         say "$(t reality_picking)"
+        spin_start "$(t spin_wait)"
         val=$(reality_pick) || { txn_abort; die "$(t reality_none)"; }
+        spin_stop
       else
         valid_domain "$val" || { txn_abort; die "$(t bad_domain "$val")"; }
         reality_check "$val" >/dev/null || { txn_abort; die "$(t reality_bad_target "$val")"; }

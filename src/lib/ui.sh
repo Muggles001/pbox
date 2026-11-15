@@ -20,11 +20,38 @@ ok() { printf '  %s✓%s %s\n' "$C_G" "$C_0" "$*"; }
 bad() { printf '  %s✗%s %s\n' "$C_R" "$C_0" "$*"; }
 note() { printf '  %s!%s %s\n' "$C_Y" "$C_0" "$*"; }
 hint() { printf '      → %s\n' "$*"; }
-warn() { printf '%s! %s%s\n' "$C_Y" "$*" "$C_0" >&2; }
+warn() { spin_stop; printf '%s! %s%s\n' "$C_Y" "$*" "$C_0" >&2; }
 die() {
+  spin_stop
   printf '%s✗ %s%s\n' "$C_R" "$*" "$C_0" >&2
   unlock
   exit 1
+}
+
+# 转圈：耗时又没有输出的步骤前调用 spin_start <说明>，做完调用 spin_stop，免得看起来像卡住了。
+# 只在终端里显示，重定向到文件或管道时什么都不输出。提问、警告和报错会先把它停掉；
+# 主进程不在了它自己退出，所以中途被打断也不会留下一个一直转的进程。
+SPIN_PID=""
+spin_start() {
+  spin_stop
+  [ -t 2 ] || return 0
+  (
+    trap 'exit 0' TERM
+    while kill -0 $$ 2>/dev/null; do
+      for c in '|' '/' '-' '\'; do
+        printf '\r  %s %s ' "$c" "$1" >&2
+        sleep 0.2 2>/dev/null || sleep 1
+      done
+    done
+  ) &
+  SPIN_PID=$!
+}
+spin_stop() {
+  [ -n "$SPIN_PID" ] || return 0
+  kill "$SPIN_PID" 2>/dev/null
+  wait "$SPIN_PID" 2>/dev/null
+  SPIN_PID=""
+  printf '\r\033[K' >&2
 }
 
 # ask <提示> [默认值]，结果在 REPLY。--yes 时直接取默认值。
@@ -34,6 +61,7 @@ ask() {
     REPLY="$d"
     return 0
   fi
+  spin_stop
   if [ -n "$d" ]; then printf '%s [%s]: ' "$1" "$d"; else printf '%s: ' "$1"; fi
   IFS= read -r REPLY || REPLY=""
   [ -z "$REPLY" ] && REPLY="$d"
@@ -44,6 +72,7 @@ ask() {
 confirm() {
   local d="${2:-y}" a
   [ "$ASSUME_YES" = 1 ] && return 0
+  spin_stop
   if [ "$d" = y ]; then printf '%s [Y/n]: ' "$1"; else printf '%s [y/N]: ' "$1"; fi
   IFS= read -r a || a=""
   case "${a:-$d}" in y | Y | yes) return 0 ;; esac
@@ -54,6 +83,7 @@ confirm() {
 confirm_risk() {
   local a
   [ "$ASSUME_YES" = 1 ] && return 1
+  spin_stop
   printf '%s [y/N]: ' "$1"
   IFS= read -r a || a=""
   case "$a" in y | Y) return 0 ;; esac
