@@ -31,18 +31,25 @@ die() {
 # 转圈：耗时又没有输出的步骤前调用 spin_start <说明>，做完调用 spin_stop，免得看起来像卡住了。
 # 只在终端里显示，重定向到文件或管道时什么都不输出。提问、警告和报错会先把它停掉；
 # 主进程不在了它自己退出，所以中途被打断也不会留下一个一直转的进程。
-SPIN_PID=""
+# 转的时候隐藏光标，否则它会在行尾闪；任何一种结束方式都要把光标放回来。
+# 连续几步之间直接再调 spin_start 换说明，已用时间接着算，不从头开始。
+SPIN_PID="" SPIN_T0=""
 spin_start() {
-  spin_stop
+  local t0
+  [ -n "$SPIN_PID" ] && { kill "$SPIN_PID" 2>/dev/null; wait "$SPIN_PID" 2>/dev/null; SPIN_PID=""; }
   [ -t 2 ] || return 0
+  [ -n "$SPIN_T0" ] || SPIN_T0=$SECONDS
+  t0=$SPIN_T0
   (
-    trap 'exit 0' TERM
+    trap 'printf "\033[?25h" >&2; exit 0' TERM INT
+    printf '\033[?25l' >&2
     while kill -0 $$ 2>/dev/null; do
-      for c in '|' '/' '-' '\'; do
-        printf '\r  %s %s ' "$c" "$1" >&2
-        sleep 0.2 2>/dev/null || sleep 1
+      for c in ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏; do
+        printf '\r\033[K  %s%s%s %s  %s%s%s' "$C_G" "$c" "$C_0" "$1" "$C_D" "$(t spin_secs "$((SECONDS - t0))")" "$C_0" >&2
+        sleep 0.1 2>/dev/null || sleep 1
       done
     done
+    printf '\033[?25h' >&2
   ) &
   SPIN_PID=$!
 }
@@ -50,8 +57,8 @@ spin_stop() {
   [ -n "$SPIN_PID" ] || return 0
   kill "$SPIN_PID" 2>/dev/null
   wait "$SPIN_PID" 2>/dev/null
-  SPIN_PID=""
-  printf '\r\033[K' >&2
+  SPIN_PID="" SPIN_T0=""
+  printf '\r\033[K\033[?25h' >&2
 }
 
 # ask <提示> [默认值]，结果在 REPLY。--yes 时直接取默认值。
