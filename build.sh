@@ -30,6 +30,7 @@ src/protocols/shadowtls.sh
 src/protocols/reality-grpc.sh
 src/protocols/reality-xhttp.sh
 src/lib/conflict.sh
+src/lib/geo.sh
 src/lib/render.sh
 src/lib/firewall.sh
 src/lib/hop.sh

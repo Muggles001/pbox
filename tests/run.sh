@@ -470,7 +470,7 @@ check "精简时不列冷门协议；只有冷门协议的用户照常列出" ba
 check "换 XHTTP 的伪装目标和路径" bash -c "bash dist/pbox.sh change reality-xhttp sni www.example.net --yes && bash dist/pbox.sh change reality-xhttp path /p1 --yes && grep -q '\"target\": \"www.example.net:443\"' '$(E)/generated/xray/10_reality-xhttp.json' && grep -q '\"path\": \"/p1\"' '$(E)/generated/xray/10_reality-xhttp.json'"
 check "换 ShadowTLS 的握手对象" bash -c "bash dist/pbox.sh change shadowtls sni www.example.net --yes && grep -q 'host: \"www.example.net\"' '$(E)/nodes/mihomo.yaml'"
 
-echo "访问限制：屏蔽 BT 与加密 DNS"
+echo "访问限制：屏蔽 BT、屏蔽回国与加密 DNS"
 new_root
 PBOX_PROTOCOLS="reality-vision reality-xhttp" pbox install --yes >/dev/null 2>&1
 sb="$(E)/generated/sing-box/00_base.json"
@@ -485,6 +485,11 @@ check "和 WARP 按网站分流一起开时只嗅探一次" bash -c "bash dist/p
 check "加密 DNS：两个内核的出站解析都改走 HTTPS" bash -c "bash dist/pbox.sh set dns cloudflare --yes && python3 -c 'import json,sys
 s=json.load(open(sys.argv[1])); x=json.load(open(sys.argv[2]))
 sys.exit(not (s[\"dns\"][\"servers\"][0]==dict(type=\"https\",tag=\"dns-doh\",server=\"1.1.1.1\") and s[\"route\"][\"default_domain_resolver\"]==\"dns-doh\" and x[\"dns\"][\"servers\"]==[\"https://1.1.1.1/dns-query\"] and x[\"outbounds\"][0][\"settings\"][\"domainStrategy\"]==\"UseIP\"))' '$sb' '$xr'"
+check "屏蔽回国：先下载名单，两个内核都按域名和 IP 拦" bash -c "bash dist/pbox.sh set block-cn on --yes && test -s '$PBOX_ROOT/usr/local/lib/pbox/bin/geoip-cn.srs' && test -s '$PBOX_ROOT/usr/local/lib/pbox/bin/geosite-cn.dat' && python3 -c 'import json,sys
+s=json.load(open(sys.argv[1]))[\"route\"]; x=json.load(open(sys.argv[2]))[\"routing\"]
+r=s[\"rules\"]; i=r.index(dict(action=\"sniff\"))
+sys.exit(not ([t[\"tag\"] for t in s[\"rule_set\"]]==[\"geosite-cn\",\"geoip-cn\"] and s[\"rule_set\"][0][\"path\"]==\"/usr/local/lib/pbox/bin/geosite-cn.srs\" and r[-3:]==[dict(rule_set=[\"geosite-cn\"],action=\"reject\"),dict(action=\"resolve\"),dict(rule_set=[\"geoip-cn\"],action=\"reject\")] and i<len(r)-3 and x[\"domainStrategy\"]==\"IPIfNonMatch\" and x[\"rules\"][-2][\"domain\"]==[\"ext:geosite-cn.dat:cn\"] and x[\"rules\"][-1][\"ip\"]==[\"ext:geoip-cn.dat:cn\"]))' '$sb' '$xr' && grep -q sniffing '$(E)/generated/xray/10_reality-xhttp.json'"
+check "关掉屏蔽回国后规则去掉" bash -c "bash dist/pbox.sh set block-cn off --yes && ! grep -q geoip-cn '$sb' && ! grep -q geoip-cn '$xr'"
 check "不认识的解析器被拒绝" bash -c "! bash dist/pbox.sh set dns 1.2.3.4 --yes"
 check "都关掉后回到原样" bash -c "bash dist/pbox.sh set dns system --yes && bash dist/pbox.sh set block-bt off --yes && ! grep -q sniff '$sb' && ! grep -q '\"dns\"' '$sb' && ! grep -q '\"dns\"' '$xr' && python3 -m json.tool '$xr' >/dev/null"
 

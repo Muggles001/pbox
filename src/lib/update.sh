@@ -71,14 +71,24 @@ cmd_update() {
 
 # 把内核升到本脚本锁定的版本，并用本脚本的模板重新渲染。失败时内核与配置一起回退。
 cmd_post_update() {
-  local core b
+  local core b geo_new=0
   need_root
   need_installed
   detect_sys
   lock
   txn_begin
   cores_ensure || { txn_abort; die "$(t dl_abort)"; }
+  # 屏蔽回国用的数据跟着更新；下载不到就继续用旧的
+  if block_cn_on; then
+    if geo_fetch; then geo_new=1; else warn "$(t geo_stale)"; fi
+  fi
   if txn_commit; then
+    # 配置没变时内核不会重启，数据换了要让它重新读
+    if [ "$geo_new" = 1 ] && ! testing; then
+      for core in xray singbox; do
+        case " $(cores_needed | tr '\n' ' ') " in *" $core "*) svc restart "$(core_svc "$core")" ;; esac
+      done
+    fi
     nodes_write
     say "$(t upd_done)"
     return 0

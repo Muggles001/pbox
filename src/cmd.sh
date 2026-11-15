@@ -453,6 +453,7 @@ cmd_set() {
     block-bt)
       case "$val" in on) gset block_bt 1 ;; off) gset block_bt 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
       ;;
+    block-cn) geo_block_set "$val" ;;
     dns)
       case "$val" in
         system | off) gset dns "" ;;
@@ -475,6 +476,8 @@ cmd_set() {
     *) txn_abort; die "$(t set_usage)" ;;
   esac
   edit_end
+  if [ "$key" = block-cn ] && [ "$val" = on ]; then note "$(t note_block_cn)"; fi
+  return 0
 }
 
 cmd_nodes() {
@@ -565,7 +568,8 @@ pbox $PBOX_VERSION
   pbox set region <XX|auto|off>
   pbox set update-check <on|off>   pbox set block-private <on|off>
   pbox set compact-nodes <on|off|auto|PROTOCOLS>
-  pbox set block-bt <on|off>   pbox set dns <system|cloudflare|google|quad9>
+  pbox set block-bt <on|off>   pbox set block-cn <on|off>
+  pbox set dns <system|cloudflare|google|quad9>
   pbox user [list|add NAME [PROTOCOLS]|protocols NAME <LIST|all>|del NAME|show NAME|reset NAME]
   pbox sub [setup|show [NAME]|push|off]
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]

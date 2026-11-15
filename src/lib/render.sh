@@ -21,6 +21,7 @@ core_render_base() {
       rules=""
       [ "$block" = 1 ] && rules=$(printf '{"type": "field", "ip": [%s], "outboundTag": "block"}' "$PRIVATE_CIDRS")
       block_bt_on && rules="$rules${rules:+, }{\"type\": \"field\", \"protocol\": [\"bittorrent\"], \"outboundTag\": \"block\"}"
+      block_cn_on && rules="$rules${rules:+, }{\"type\": \"field\", \"domain\": [\"ext:geosite-cn.dat:cn\"], \"outboundTag\": \"block\"}, {\"type\": \"field\", \"ip\": [\"ext:geoip-cn.dat:cn\"], \"outboundTag\": \"block\"}"
       cat <<EOF
 {
   "log": {"loglevel": "error", "access": "none"},$([ -n "$doh" ] && printf '\n  "dns": {"servers": ["https://%s/dns-query"]},' "$doh")
@@ -28,7 +29,7 @@ core_render_base() {
     {"tag": "direct", "protocol": "freedom"$([ -n "$doh" ] && printf ', "settings": {"domainStrategy": "UseIP"}')},
     {"tag": "block", "protocol": "blackhole"}
   ],
-  "routing": {
+  "routing": {$(block_cn_on && printf '\n    "domainStrategy": "IPIfNonMatch",')
     "rules": [$rules]
   }
 }
@@ -46,8 +47,10 @@ EOF
       [ "$block" = 1 ] && rules="$rules${rules:+, }{\"ip_is_private\": true, \"action\": \"reject\"}"
       # 认出 BT、按域名分流都要先嗅探：客户端可能只发来 IP 和一串字节
       extra=$(warp_rules_json)
-      if block_bt_on || [ -n "$extra" ]; then rules="$rules${rules:+, }{\"action\": \"sniff\"}"; fi
+      if block_bt_on || block_cn_on || [ -n "$extra" ]; then rules="$rules${rules:+, }{\"action\": \"sniff\"}"; fi
       block_bt_on && rules="$rules${rules:+, }{\"protocol\": \"bittorrent\", \"action\": \"reject\"}"
+      # 先按域名拦；只知道 IP 的、名单外的域名，解析出地址后再按 IP 拦一次
+      block_cn_on && rules="$rules${rules:+, }{\"rule_set\": [\"geosite-cn\"], \"action\": \"reject\"}, {\"action\": \"resolve\"}, {\"rule_set\": [\"geoip-cn\"], \"action\": \"reject\"}"
       [ -n "$extra" ] && rules="$rules${rules:+, }$extra"
       cat <<EOF
 {
@@ -55,7 +58,7 @@ EOF
   "outbounds": [
     {"type": "direct", "tag": "direct"}
   ],$(warp_endpoint_json)
-  "route": {$([ -n "$doh" ] && printf '\n    "default_domain_resolver": "dns-doh",')
+  "route": {$([ -n "$doh" ] && printf '\n    "default_domain_resolver": "dns-doh",')$(block_cn_on && printf '\n    "rule_set": [{"type": "local", "tag": "geosite-cn", "format": "binary", "path": "%s/geosite-cn.srs"}, {"type": "local", "tag": "geoip-cn", "format": "binary", "path": "%s/geoip-cn.srs"}],' "${BINDIR#"$R"}" "${BINDIR#"$R"}")
     "rules": [$rules]$(warp_final_json)
   }
 }

@@ -413,6 +413,7 @@ menu_limits() {
     printf "$T_m_fmt" 1 "$(t mset_block)" "${C_D}[$(onoff "$(gget block_private 1)")] $(t mset_block_d)${C_0}"
     printf "$T_m_fmt" 2 "$(t mset_bt)" "${C_D}[$(onoff "$(gget block_bt 0)")] $(t mset_bt_d)${C_0}"
     printf "$T_m_fmt" 3 "$(t mset_dns)" "${C_D}[$(gget dns system)] $(t mset_dns_d)${C_0}"
+    printf "$T_m_fmt" 4 "$(t mset_cn)" "${C_D}[$(onoff "$(gget block_cn 0)")] $(t mset_cn_d)${C_0}"
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -429,6 +430,11 @@ menu_limits() {
       3)
         ask " $(t mset_ask_dns)" "system"
         run cmd_set dns "$REPLY"
+        ;;
+      4)
+        v=on
+        [ "$(gget block_cn 0)" = 1 ] && v=off
+        run cmd_set block-cn "$v"
         ;;
       *) return 0 ;;
     esac
