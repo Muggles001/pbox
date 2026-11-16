@@ -186,7 +186,7 @@ EOF
 site_locations() {
   local src host id site="${SITE_DIR#"$R"}"
   src=$(site_source)
-  if [ "$src" = builtin ]; then selfsub_location =404; else selfsub_location @pbox_site; fi
+  if [ "$src" = builtin ]; then selfsub_location '=404'; else selfsub_location @pbox_site; fi
   for id in vless-wstls vmess; do
     proto_enabled "$id" || continue
     # 路径对但不是 WebSocket 的请求（比如浏览器直接打开）按不存在的页面处理

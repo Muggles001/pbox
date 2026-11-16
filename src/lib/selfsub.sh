@@ -104,7 +104,7 @@ EOF
     printf '  server {\n    listen %s ssl default_server;\n' "$p"
     [ -n "$v6" ] && printf '    listen [::]:%s ssl default_server;\n' "$p"
   fi
-  selfsub_location =404
+  selfsub_location '=404'
   printf '    location / { return 404; }\n  }\n}\n'
 }
 
