@@ -13,7 +13,7 @@ proto_vless_wstls_meta() {
   esac
 }
 
-proto_vless_wstls_plan() { wstls_plan vless-wstls vmess; }
+proto_vless_wstls_plan() { wstls_plan vless-wstls; }
 
 proto_vless_wstls_secrets() { :; }
 
@@ -39,7 +39,7 @@ proto_vless_wstls_render_inbound() {
 EOF
 }
 
-# 以下 wstls_* 由伪装站上的两个 WS 协议（VLESS-WS-TLS、VMess-WS-TLS）共用。
+# 以下 wstls_* 由伪装站上挂在隐蔽路径后面的协议（VLESS-WS-TLS、VMess-WS-TLS、VLESS-XHTTP-TLS）共用。
 #
 # 输出格式：标签|客户端连接的地址|握手和 Host 里写的名字。
 # 直连节点之外，设了 CDN 子域名时多一个经 CDN 的节点；再设了优选地址时多一个优选节点，
@@ -61,6 +61,8 @@ wstls_name() { printf '%s' "${NODE_EXTRA:-$(gget tls_domain)}"; }
 wstls_selftest() {
   local srv="$2"
   [ "$2" = "$(gget tls_domain)" ] && srv=127.0.0.1
+  # XHTTP 只有 Xray 能当客户端
+  if [ "$1" = vless-xhttp ]; then vless_xhttp_selftest "$srv" "$3"; return; fi
   selftest_client "$1" "$srv" "$3"
 }
 
@@ -82,13 +84,16 @@ wstls_doctor() { # <协议>
   return $rc
 }
 
-# 内部端口和路径随机；沿用另一个 WS 协议已设的优选地址，不必再设一遍
-wstls_plan() { # <协议> <另一个协议>
-  local p
+# 内部端口和路径随机；沿用同类协议已设的优选地址，不必再设一遍
+wstls_plan() { # <协议>
+  local p o
   p=$(random_port tcp) || return 1
   pset "$1" port "$p"
   pset "$1" path "/$(rand_str "$(rand_int 8 16)")"
-  [ -n "$(gget cdn_host)" ] && pset "$1" cdn_addr "$(pget "$2" cdn_addr)"
+  [ -n "$(gget cdn_host)" ] || return 0
+  for o in vless-wstls vmess vless-xhttp; do
+    [ "$o" != "$1" ] && [ -n "$(pget "$o" cdn_addr)" ] && { pset "$1" cdn_addr "$(pget "$o" cdn_addr)"; break; }
+  done
   return 0
 }
 

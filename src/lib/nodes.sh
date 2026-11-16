@@ -26,11 +26,11 @@ compact_pick() { # <用户>
       case " $pick " in *" $id "*) user_has "$1" "$id" && rec="$rec $id" ;; esac
     done
   else
-    for role in "reality-vision trojan anytls reality-grpc reality-xhttp" "hysteria2 tuic" "vless-wstls vmess" "vless-ws"; do
+    for role in "reality-vision trojan anytls reality-grpc reality-xhttp" "hysteria2 tuic" "vless-wstls vmess vless-xhttp" "vless-ws"; do
       for id in $role; do
         proto_enabled "$id" && user_has "$1" "$id" || continue
         # 没有套 CDN 时，伪装站上的 WS 是直连的，不算兜底
-        case "$id" in vless-wstls | vmess) [ -n "$(gget cdn_host)" ] || continue ;; esac
+        case "$id" in vless-wstls | vmess | vless-xhttp) [ -n "$(gget cdn_host)" ] || continue ;; esac
         rec="$rec $id"
         break
       done
@@ -190,7 +190,7 @@ nodes_show() {
   fi
   [ "$(gget compact_nodes 0)" = 1 ] && say "  ${C_D}$(t nodes_compact_on)${C_0}"
   proto_enabled shadowtls && say "  ${C_D}$(t note_stls_nolink)${C_0}"
-  proto_enabled reality-xhttp && say "  ${C_D}$(t note_xhttp_clients)${C_0}"
+  { proto_enabled reality-xhttp || proto_enabled vless-xhttp; } && say "  ${C_D}$(t note_xhttp_clients)${C_0}"
   say "  $(t nodes_qr)        pbox qr"
   say "  $(t nodes_files)   ${NODES#"$R"}/"
   proto_enabled hysteria2 && ! tls_real && say "  ${C_D}$(t nodes_pin_hint)${C_0}"

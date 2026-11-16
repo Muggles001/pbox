@@ -64,10 +64,10 @@ fp_of() { pget "$1" fp chrome; }
 proto_opt() { # <协议> <sni|path|fp|cdn>
   case "$2" in
     sni) case "$1" in reality-vision | reality-grpc | reality-xhttp | shadowtls) return 0 ;; esac ;;
-    path) case "$1" in vless-ws | vless-wstls | vmess | reality-xhttp) return 0 ;; esac ;;
-    fp) case "$1" in reality-vision | vless-ws | trojan | vless-wstls | vmess | reality-grpc | reality-xhttp | shadowtls) return 0 ;; esac ;;
+    path) case "$1" in vless-ws | vless-wstls | vmess | vless-xhttp | reality-xhttp) return 0 ;; esac ;;
+    fp) case "$1" in reality-vision | vless-ws | trojan | vless-wstls | vmess | vless-xhttp | reality-grpc | reality-xhttp | shadowtls) return 0 ;; esac ;;
     # 伪装站上的 WS 要先设了套 CDN 的子域名才有优选可言
-    cdn) case "$1" in vless-ws) return 0 ;; vless-wstls | vmess) [ -n "$(gget cdn_host)" ] && return 0 ;; esac ;;
+    cdn) case "$1" in vless-ws) return 0 ;; vless-wstls | vmess | vless-xhttp) [ -n "$(gget cdn_host)" ] && return 0 ;; esac ;;
   esac
   return 1
 }

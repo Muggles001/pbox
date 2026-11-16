@@ -13,6 +13,12 @@ dns_doh_ip() {
 
 block_bt_on() { [ "$(gget block_bt 0)" = 1 ]; }
 
+# Xray 的入站要自己打开嗅探，路由才认得出 BT 和域名。只用于判断，不改连接的目的地
+xray_sniffing() {
+  { block_bt_on || block_cn_on; } && printf '\n      "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true},'
+  return 0
+}
+
 core_render_base() {
   local rules extra block doh
   block=$(gget block_private 1) doh=$(dns_doh_ip)

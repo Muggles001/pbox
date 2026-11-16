@@ -276,7 +276,7 @@ cmd_del() {
 # pbox change <协议> port <端口|auto>
 # pbox change reality-vision sni <域名|auto>
 cmd_change() {
-  local id="${1:-}" key="${2:-}" val="${3:-auto}" l4
+  local id="${1:-}" key="${2:-}" val="${3:-auto}" l4 other o
   edit_begin
   proto_enabled "$id" || { txn_abort; die "$(t del_missing "$id")"; }
   case "$key" in
@@ -290,7 +290,7 @@ cmd_change() {
       # 优选地址：客户端改连这个地址，再由 Cloudflare 送回自己的隧道或机器
       if ! proto_opt "$id" cdn; then
         txn_abort
-        case "$id" in vless-wstls | vmess) die "$(t cdn_pref_need_host)" ;; *) die "$(t change_usage)" ;; esac
+        case "$id" in vless-wstls | vmess | vless-xhttp) die "$(t cdn_pref_need_host)" ;; *) die "$(t change_usage)" ;; esac
       fi
       case "$val" in
         off | auto | none) val="" ;;
@@ -327,11 +327,16 @@ cmd_change() {
         /*) printf '%s' "$val" | grep -Eq '^/[A-Za-z0-9_/-]{1,64}$' || { txn_abort; die "$(t bad_path)"; } ;;
         *) txn_abort; die "$(t bad_path)" ;;
       esac
-      # 伪装站上的两个 WS 协议共用网站，路径不能相同
-      case "$id" in
-        vless-wstls) [ "$val" != "$(pget vmess path)" ] || { txn_abort; die "$(t path_taken)"; } ;;
-        vmess) [ "$val" != "$(pget vless-wstls path)" ] || { txn_abort; die "$(t path_taken)"; } ;;
-      esac
+      # 伪装站上的几个协议共用网站，路径不能相同；XHTTP 按前缀匹配，也不能互为前缀
+      if [ "$(pmeta "$id" behind)" = site ]; then
+        for other in vless-wstls vmess vless-xhttp; do
+          [ "$other" = "$id" ] && continue
+          o=$(pget "$other" path)
+          [ -n "$o" ] || continue
+          case "$val" in "$o" | "$o"/*) txn_abort; die "$(t path_taken)" ;; esac
+          case "$o" in "$val"/*) txn_abort; die "$(t path_taken)" ;; esac
+        done
+      fi
       pset "$id" path "$val"
       ;;
     fp)
@@ -554,14 +559,14 @@ pbox $PBOX_VERSION
   pbox change <proto> ext-port <n>
   pbox change hysteria2 hop <on|off|A-B>
   pbox change hysteria2 obfs <on|off>
-  pbox change <vless-ws|vless-wstls|vmess|reality-xhttp> path <auto|/xxx>
+  pbox change <vless-ws|vless-wstls|vmess|vless-xhttp|reality-xhttp> path <auto|/xxx>
   pbox change tuic cc <bbr|cubic|new_reno>
   pbox change socks allow <IP,CIDR,...|any>
-  pbox change <vless-ws|vless-wstls|vmess> cdn <addr|off>
+  pbox change <vless-ws|vless-wstls|vmess|vless-xhttp> cdn <addr|off>
   pbox argo [status|fixed <domain>|fixed off|temp <on|off>]
   pbox change <reality-vision|reality-grpc|reality-xhttp|shadowtls> sni <domain|auto>
   pbox change reality-vision keys
-  pbox change <reality-vision|vless-ws|trojan|vless-wstls|vmess|reality-grpc|reality-xhttp|shadowtls> fp <chrome|firefox|safari|ios|android|edge|random>
+  pbox change <reality-vision|vless-ws|trojan|vless-wstls|vmess|vless-xhttp|reality-grpc|reality-xhttp|shadowtls> fp <chrome|firefox|safari|ios|android|edge|random>
   pbox change vless-ws edge-port <443|2053|2083|2087|2096|8443>
   pbox reset-keys
   pbox set addr-mode <split|merged|all> [domain]

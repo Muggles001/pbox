@@ -42,7 +42,7 @@ proto_reality_xhttp_render_inbound() {
       "listen": "$(listen_addr)",
       "port": $(pget reality-xhttp port),
       "protocol": "vless",
-      "settings": {"clients": [$users], "decryption": "none"},$({ block_bt_on || block_cn_on; } && printf '\n      "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true},')
+      "settings": {"clients": [$users], "decryption": "none"},$(xray_sniffing)
       "streamSettings": {
         "network": "xhttp",
         "xhttpSettings": {"path": "$(pget reality-xhttp path)"},

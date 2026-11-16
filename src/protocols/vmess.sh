@@ -12,7 +12,7 @@ proto_vmess_meta() {
   esac
 }
 
-proto_vmess_plan() { wstls_plan vmess vless-wstls; }
+proto_vmess_plan() { wstls_plan vmess; }
 
 proto_vmess_secrets() { :; }
 

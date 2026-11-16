@@ -449,6 +449,22 @@ sys.exit(not (len(v)==1 and v[0][\"add\"]==\"www.visa.com.sg\" and v[0][\"sni\"]
 check "后开的 WS 协议沿用已设的优选地址" grep -qx 'cdn_addr=www.visa.com.sg' "$(E)/state/protocols/vless-wstls.env"
 unset PBOX_TEST_DNS_A
 
+echo "VLESS-XHTTP-TLS"
+new_root
+PBOX_PROTOCOLS="reality-vision" pbox install --yes >/dev/null 2>&1
+export PBOX_TEST_DNS_A=203.0.113.10
+pbox domain set w.example.com --yes >/dev/null 2>&1
+check "没开伪装站时不能加" bash -c "! bash dist/pbox.sh add vless-xhttp --yes"
+pbox site on --yes >/dev/null 2>&1
+check "加上 XHTTP" pbox add vless-xhttp --yes
+check "由 Xray 承载，只听本机，不自己做加密" bash -c "python3 -c 'import json,sys; i=json.load(open(sys.argv[1]))[\"inbounds\"][0]; s=i[\"streamSettings\"]; sys.exit(not (i[\"listen\"]==\"127.0.0.1\" and s[\"network\"]==\"xhttp\" and \"security\" not in s and s[\"xhttpSettings\"][\"path\"].startswith(\"/\")))' '$(E)/generated/xray/10_vless-xhttp.json'"
+check "网站按路径前缀用 gRPC 的方式转给内核" bash -c "p=\$(sed -n 's/^path=//p' '$(E)/state/protocols/vless-xhttp.env'); port=\$(sed -n 's/^port=//p' '$(E)/state/protocols/vless-xhttp.env'); grep -q \"location \$p {\" '$(E)/generated/nginx/nginx.conf' && grep -q \"grpc_pass grpc://127.0.0.1:\$port;\" '$(E)/generated/nginx/nginx.conf'"
+check "只有通用链接，直连时用 HTTP/2" bash -c "grep -q '^vless://.*@w.example.com:443?.*security=tls&sni=w.example.com.*alpn=h2&type=xhttp&host=w.example.com.*#XHTTP-TLS' '$(E)/nodes/links.txt' && ! grep -q XHTTP '$(E)/nodes/sing-box.json' && ! grep -q XHTTP '$(E)/nodes/mihomo.yaml'"
+check "前面有 Trojan 时直连节点改用 HTTP/1.1" bash -c "bash dist/pbox.sh add trojan --yes && grep -q 'alpn=http%2F1.1&type=xhttp.*#XHTTP-TLS' '$(E)/nodes/links.txt'"
+check "路径不能和别的协议相同或互相包含" bash -c "bash dist/pbox.sh add vless-wstls --yes && bash dist/pbox.sh change vless-xhttp path /xh --yes && ! bash dist/pbox.sh change vless-wstls path /xh --yes && ! bash dist/pbox.sh change vless-wstls path /xh/ws --yes && bash dist/pbox.sh change vless-wstls path /ws1 --yes && ! bash dist/pbox.sh change vless-xhttp path /ws1 --yes"
+check "经 CDN 的节点用 HTTP/2，沿用已设的优选地址" bash -c "bash dist/pbox.sh del vless-xhttp --yes && bash dist/pbox.sh site cdn c.example.com --yes && bash dist/pbox.sh change vless-wstls cdn www.visa.com.sg --yes && bash dist/pbox.sh add vless-xhttp --yes && grep -q '@www.visa.com.sg:443?.*sni=c.example.com.*alpn=h2&type=xhttp&host=c.example.com.*#XHTTP-CDN-Pref' '$(E)/nodes/links.txt' && [ \$(grep -c '#XHTTP-' '$(E)/nodes/links.txt') = 3 ]"
+unset PBOX_TEST_DNS_A
+
 echo "Shadowsocks 2022、ShadowTLS、Reality-XHTTP"
 new_root
 check "一起安装" bash -c "PBOX_PROTOCOLS='reality-vision hysteria2 reality-xhttp shadowtls ss2022' bash dist/pbox.sh install --yes"

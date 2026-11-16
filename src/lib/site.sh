@@ -190,6 +190,19 @@ site_locations() {
     }
 EOF
   done
+  if proto_enabled vless-xhttp; then
+    # XHTTP 在路径后面还会接会话编号，所以按前缀匹配；按 gRPC 的方式转给内核，上传下载才不会被缓冲
+    cat <<EOF
+    location $(pget vless-xhttp path) {
+      grpc_pass grpc://127.0.0.1:$(pget vless-xhttp port);
+      grpc_set_header Host \$host;
+      client_max_body_size 0;
+      client_body_timeout 1d;
+      grpc_read_timeout 1d;
+      grpc_send_timeout 1d;
+    }
+EOF
+  fi
   if [ "$src" = builtin ]; then
     cat <<EOF
     root $site;
