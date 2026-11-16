@@ -41,6 +41,7 @@ src/lib/bbr.sh
 src/lib/argo.sh
 src/lib/nodes.sh
 src/lib/sub.sh
+src/lib/selfsub.sh
 src/lib/users.sh
 src/lib/doctor.sh
 src/lib/fix.sh

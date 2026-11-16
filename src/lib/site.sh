@@ -83,7 +83,38 @@ nginx_validate() { # <配置目录>
 site_source() { gget site_source builtin; }
 
 nginx_render() {
-  local dom sp own rp mod cdn certs="${CERTS#"$R"}" var="${VARDIR#"$R"}" log="${LOGDIR#"$R"}"
+  if site_on_p; then nginx_render_site; else nginx_render_port; fi
+}
+
+# 网站与单独的订阅端口共用的 http 部分
+nginx_http_head() {
+  local certs="${CERTS#"$R"}" var="${VARDIR#"$R"}"
+  cat <<EOF
+  access_log off;
+  server_tokens off;
+  client_body_temp_path $var/nginx-tmp/body;
+  proxy_temp_path $var/nginx-tmp/proxy;
+  fastcgi_temp_path $var/nginx-tmp/fastcgi;
+  uwsgi_temp_path $var/nginx-tmp/uwsgi;
+  scgi_temp_path $var/nginx-tmp/scgi;
+  types {
+    text/html html;
+    text/css css;
+    application/javascript js;
+    image/svg+xml svg;
+    image/png png;
+    image/jpeg jpg jpeg;
+    image/x-icon ico;
+  }
+  default_type application/octet-stream;
+  ssl_certificate $certs/domain.crt;
+  ssl_certificate_key $certs/domain.key;
+  ssl_protocols TLSv1.2 TLSv1.3;
+EOF
+}
+
+nginx_render_site() {
+  local dom sp own rp mod cdn var="${VARDIR#"$R"}" log="${LOGDIR#"$R"}"
   dom=$(gget tls_domain) sp=$(gget site_port) cdn=$(gget cdn_host)
   # 开了 Trojan 时，自己域名的连接先交给它，密码不对的再由它转给网站
   own=$sp
@@ -119,26 +150,7 @@ $([ -n "$(gget ip6)" ] && echo "    listen [::]:443;")
 }
 
 http {
-  access_log off;
-  server_tokens off;
-  client_body_temp_path $var/nginx-tmp/body;
-  proxy_temp_path $var/nginx-tmp/proxy;
-  fastcgi_temp_path $var/nginx-tmp/fastcgi;
-  uwsgi_temp_path $var/nginx-tmp/uwsgi;
-  scgi_temp_path $var/nginx-tmp/scgi;
-  types {
-    text/html html;
-    text/css css;
-    application/javascript js;
-    image/svg+xml svg;
-    image/png png;
-    image/jpeg jpg jpeg;
-    image/x-icon ico;
-  }
-  default_type application/octet-stream;
-  ssl_certificate $certs/domain.crt;
-  ssl_certificate_key $certs/domain.key;
-  ssl_protocols TLSv1.2 TLSv1.3;
+$(nginx_http_head)
 
 EOF
   # 握手里不是自己域名的连接走到这里时直接拒绝，不把证书亮给扫描 IP 的人
@@ -174,6 +186,7 @@ EOF
 site_locations() {
   local src host id site="${SITE_DIR#"$R"}"
   src=$(site_source)
+  if [ "$src" = builtin ]; then selfsub_location =404; else selfsub_location @pbox_site; fi
   for id in vless-wstls vmess; do
     proto_enabled "$id" || continue
     # 路径对但不是 WebSocket 的请求（比如浏览器直接打开）按不存在的页面处理
@@ -211,14 +224,16 @@ EOF
 EOF
   else
     host=$(printf '%s' "$src" | sed 's#^https://##; s#/.*##')
-    cat <<EOF
-    location / {
+    for id in / @pbox_site; do
+      cat <<EOF
+    location $id {
       proxy_pass https://$host;
       proxy_set_header Host $host;
       proxy_ssl_server_name on;
       proxy_set_header Accept-Encoding "";
     }
 EOF
+    done
   fi
 }
 

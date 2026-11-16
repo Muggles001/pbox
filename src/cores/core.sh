@@ -37,7 +37,7 @@ core_cmd() {
 cores_needed() {
   local id
   { for id in $(protos_enabled); do pmeta "$id" core; echo; done; relay_fwd_any && echo singbox; } | sort -u
-  if site_on_p; then echo nginx; fi
+  if site_on_p || selfsub_port_on; then echo nginx; fi
 }
 
 # 直连下载失败时问一次镜像，用户填了就记在 PBOX_MIRROR 里，本次运行后面的下载都用它。

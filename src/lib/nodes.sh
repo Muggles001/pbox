@@ -166,6 +166,7 @@ nodes_write() {
   done
   NODE_USER=""
   sub_build
+  selfsub_build
   testing || find "$NODES" -type f -exec chmod 600 {} +
 }
 

@@ -650,6 +650,7 @@ pbox $PBOX_VERSION
   pbox set restart <off|on|HH:MM>   pbox restart
   pbox user [list|add NAME [PROTOCOLS]|protocols NAME <LIST|all>|del NAME|show NAME|reset NAME]
   pbox sub [setup|show [NAME]|push|off]
+  pbox sub self [on|off|reset [NAME]|port PORT [EXT_PORT]]
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]
   pbox warp [on|off|all|domains a.com,b.com|status|test]
   pbox relay [status|invite|forward CODE [NAME]|forward off NAME|via CODE [NAME]|via off NAME]

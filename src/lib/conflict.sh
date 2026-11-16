@@ -60,6 +60,7 @@ conflict_check() {
     proto_known "$a" || die "$(t c_unknown "$a")"
     case "$(pmeta "$a" core)" in xray | singbox) ;; *) die "$(t c_unknown "$a")" ;; esac
   done
+  selfsub_port_fix
   while [ "$again" = 1 ]; do
     again=0
     for a in $(protos_enabled); do

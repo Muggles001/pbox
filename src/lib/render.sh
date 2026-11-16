@@ -149,7 +149,7 @@ core_sync() {
   svc enable "$n"
   if ! svc active "$n"; then
     # 内核的热重载是异步的：它让出 443 可能比这里晚一点，等它一下再启动 Nginx
-    [ "$core" = nginx ] && ! testing && for _ in 1 2 3 4 5 6 7 8 9 10; do port_in_use tcp 443 || break; sleep 0.5; done
+    [ "$core" = nginx ] && site_on_p && ! testing && for _ in 1 2 3 4 5 6 7 8 9 10; do port_in_use tcp 443 || break; sleep 0.5; done
     svc start "$n"
   elif [ "${UNIT_CHANGED:-0}" = 1 ]; then
     svc restart "$n"

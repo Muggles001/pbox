@@ -675,6 +675,8 @@ menu_sub() {
     item 3 msub_push msub_push_d
     item 4 msub_machines msub_machines_d
     item 5 msub_off msub_off_d
+    printf "$T_m_fmt" 6 "$(t msub_self)" "${C_D}[$(if selfsub_on; then t on; else t off; fi)] $(t msub_self_d)${C_0}"
+    selfsub_on && item 7 msub_self_reset msub_self_reset_d
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -683,6 +685,8 @@ menu_sub() {
       3) run cmd_sub push ;;
       4) menu_machines ;;
       5) run cmd_sub off ;;
+      6) if selfsub_on; then run cmd_selfsub off; else run cmd_selfsub on; fi ;;
+      7) selfsub_on && run cmd_selfsub reset ;;
       *) return 0 ;;
     esac
   done

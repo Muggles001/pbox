@@ -207,6 +207,7 @@ cmd_doctor() {
   all="d_services d_config d_ports d_firewall d_dns d_time d_egress d_domain d_site d_cdn d_relay"
   for id in $(protos_enabled); do all="$all proto:$id"; done
   [ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && all="$all d_warp"
+  selfsub_on && all="$all d_selfsub"
   # 结果要等全部做完才一起显示，中间一分钟左右没有输出，所以报一下进度
   # shellcheck disable=SC2086
   set -- $all
@@ -235,6 +236,8 @@ cmd_doctor() {
 # 报告里要隐去的原文，每行"代号<TAB>原文"：本机地址、自己的域名、隧道、订阅仓库、中转的对端
 _redact_relay() { printf '<relay>\t%s\n' "$2"; }
 redact_words() {
+  local u
+  for u in $(users_list); do printf '<sub-path>\t%s\n' "$(uget "$u" sub_path)"; done
   printf '<IPv4>\t%s\n' "$(gget ip4)"
   printf '<IPv6>\t%s\n' "$(gget ip6)"
   printf '<domain>\t%s\n' "$(gget domain)"

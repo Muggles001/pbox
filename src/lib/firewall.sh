@@ -46,6 +46,7 @@ ports_wanted() {
     [ -n "$r" ] && echo "${r%-*}:${r#*-}/udp"
     # 分流开着时 443 由 Nginx 监听，不论 Reality 在不在 443
     site_on_p && echo 443/tcp
+    selfsub_port_on && echo "$(gget selfsub_port)/tcp"
     :
   } | awk '!seen[$0]++'
 }

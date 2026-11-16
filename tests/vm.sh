@@ -95,6 +95,20 @@ else
   check "卸载后无残留" bash -c '! [ -e /etc/pbox ] && ! [ -e /usr/local/lib/pbox ] && ! [ -e /usr/local/bin/pbox ] && ! [ -e /etc/systemd/system/pbox-singbox.service ] && ! id pbox 2>/dev/null'
   check "从备份恢复到干净系统" $P restore /tmp/pbox-vm.bin --yes
   check "恢复后服务运行中" bash -c 'sleep 1; systemctl is-active --quiet pbox-singbox'
+  # 自建订阅：流水线拿不到正式证书，用一张自签的 IP 证书代替，取订阅时把它当作信任的根
+  gfile=/etc/pbox/state/global.env
+  ca=/etc/pbox/certs/domain.crt
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 -subj /CN=127.0.0.1 \
+    -addext subjectAltName=IP:127.0.0.1 -keyout /etc/pbox/certs/domain.key -out "$ca" 2>/dev/null
+  sed -i '/^tls_domain=/d' "$gfile" && echo tls_domain=127.0.0.1 >>"$gfile"
+  check "开启自建订阅后 Nginx 在单独的端口上运行" bash -c "$P sub self on --yes && sleep 1 && systemctl is-active --quiet pbox-nginx && ss -H -lnt | grep -q \":\$(sed -n 's/^selfsub_port=//p' $gfile) \""
+  ssurl() { echo "https://127.0.0.1:$(sed -n 's/^selfsub_port=//p' "$gfile")/$1/clash"; }
+  spath=$(sed -n 's/^sub_path=//p' /etc/pbox/state/users/default.env)
+  check "用订阅地址取到的就是本机生成的订阅" bash -c "curl -sf --cacert $ca '$(ssurl "$spath")' | cmp - /etc/pbox/nodes/users/default/sub/clash"
+  check "猜错路径得到 404" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' --cacert $ca '$(ssurl 0123456789abcdef0123456789abcdef)')\" = 404 ]"
+  check "Nginx 不是以 root 运行" bash -c '[ "$(ps -o user= -C nginx | sort -u)" = pbox ]'
+  check "换路径后旧地址立即失效" bash -c "$P sub self reset --yes >/dev/null && [ \"\$(curl -s -o /dev/null -w '%{http_code}' --cacert $ca '$(ssurl "$spath")')\" = 404 ]"
+  check "关闭后 Nginx 服务撤掉" bash -c "$P sub self off --yes && ! systemctl is-active --quiet pbox-nginx && ! [ -e /etc/systemd/system/pbox-nginx.service ]"
   $P uninstall --yes >/dev/null 2>&1
 
   # 系统防火墙：只在流水线里打开，会改动本机的 ufw。先放行 SSH，免得在远程机器上把自己关在门外

@@ -606,6 +606,41 @@ check "平时查看日志提示先打开调试" bash -c "bash dist/pbox.sh log |
 check "菜单里打开再关闭" bash -c "printf '9\n3\n15\n\n0\n0\n' | bash dist/pbox.sh >/dev/null 2>&1; grep -q '^debug_until=.' '$(E)/state/global.env' && printf '9\n3\n\n0\n0\n' | bash dist/pbox.sh >/dev/null 2>&1; ! grep -q '^debug_until=.' '$(E)/state/global.env'"
 unset -f dbg_level
 
+echo "自建订阅"
+new_root
+PBOX_PROTOCOLS="reality-vision hysteria2 anytls" pbox install --yes >/dev/null 2>&1
+SV="$PBOX_ROOT/var/lib/pbox/sub"
+ss_path() { sed -n 's/^sub_path=//p' "$(E)/state/users/$1.env"; }
+ss_port() { sed -n 's/^selfsub_port=//p' "$(E)/state/global.env"; }
+check "没有证书时拒绝，不提供明文订阅" bash -c "! bash dist/pbox.sh sub self on --yes && ! test -e '$SV'"
+pbox domain set ip --yes >/dev/null 2>&1
+check "IP 证书：单独开一个端口，地址用 IP" bash -c "bash dist/pbox.sh sub self on --yes >'$PBOX_ROOT/ss.txt' && grep -q \"https://203.0.113.10:\$(sed -n 's/^selfsub_port=//p' '$(E)/state/global.env')/[0-9a-f]\\{32\\}/clash\" '$PBOX_ROOT/ss.txt'"
+check "提供的文件与本机生成的订阅一致" bash -c "for k in v2ray clash singbox; do cmp '$(E)/nodes/users/default/sub/'\$k '$SV/$(ss_path default)/'\$k || exit 1; done"
+check "Nginx 只认订阅路径，配置里不含任何人的路径" bash -c "grep -q 'listen $(ss_port) ssl default_server' '$(E)/generated/nginx/nginx.conf' && grep -q 'return 404' '$(E)/generated/nginx/nginx.conf' && ! grep -q '$(ss_path default)' '$(E)/generated/nginx/nginx.conf'"
+check "IP 证书时不拒绝不带域名的握手" bash -c "! grep -q ssl_reject_handshake '$(E)/generated/nginx/nginx.conf'"
+check "单独的端口记入要放行的端口" bash -c ". dist/pbox.sh; ports_wanted | grep -qx '$(ss_port)/tcp'"
+pbox user add bob --yes >/dev/null 2>&1
+check "每人一条路径，各自的文件只含自己的节点" bash -c "test '$(ss_path default)' != \"\$(sed -n 's/^sub_path=//p' '$(E)/state/users/bob.env')\" && cmp '$(E)/nodes/users/bob/sub/clash' '$SV/'\$(sed -n 's/^sub_path=//p' '$(E)/state/users/bob.env')/clash"
+old_bob=$(ss_path bob)
+check "只给一个人换路径：旧路径立即失效，别人不变" bash -c "d=\$(sed -n 's/^sub_path=//p' '$(E)/state/users/default.env'); bash dist/pbox.sh sub self reset bob --yes >/dev/null && ! test -e '$SV/$old_bob' && test -e '$SV/'\$(sed -n 's/^sub_path=//p' '$(E)/state/users/bob.env')/clash && test -e '$SV/'\$d/clash"
+check "删除用户后他的订阅目录消失" bash -c "bash dist/pbox.sh user del bob --yes >/dev/null && test \$(ls '$SV' | wc -l) = 1"
+mkdir -p "$PBOX_ROOT/var/log/pbox" && echo "GET /$(ss_path default)/clash" >"$PBOX_ROOT/var/log/pbox/pbox-nginx.log"
+check "求助用的日志隐去订阅路径" bash -c "bash dist/pbox.sh log --report | grep -q 'GET /<sub-path>/clash'"
+check "指定端口与外网端口：地址里用外网端口" bash -c "bash dist/pbox.sh sub self port 31000 41000 --yes | grep -q 'https://203.0.113.10:41000/' && grep -q 'listen 31000 ssl' '$(E)/generated/nginx/nginx.conf'"
+check "协议要占用正在提供订阅的端口时拒绝" bash -c "! bash dist/pbox.sh change anytls port 31000 --yes && test \$(sed -n 's/^selfsub_port=//p' '$(E)/state/global.env') = 31000"
+check "端口写错时拒绝" bash -c "! bash dist/pbox.sh sub self port abc && ! bash dist/pbox.sh sub self port 70000 && ! bash dist/pbox.sh sub self port \$(sed -n 's/^port=//p' '$(E)/state/protocols/anytls.env')"
+check "关闭后文件删除，Nginx 不再需要" bash -c "bash dist/pbox.sh sub self off --yes >/dev/null && ! test -e '$SV' && ! test -e '$(E)/generated/nginx'"
+export PBOX_TEST_DNS_A=203.0.113.10
+pbox domain set s.example.com --yes >/dev/null 2>&1
+check "再开地址不变；域名证书时不带域名的握手直接拒绝" bash -c "p=\$(sed -n 's/^sub_path=//p' '$(E)/state/users/default.env'); bash dist/pbox.sh sub self on --yes | grep -q \"s.example.com:41000/\$p/clash\" && grep -q ssl_reject_handshake '$(E)/generated/nginx/nginx.conf' && grep -q 'server_name s.example.com;' '$(E)/generated/nginx/nginx.conf'"
+pbox site on --yes >/dev/null 2>&1
+check "开了伪装站就挂到 443 的网站上，不再单独开端口" bash -c "bash dist/pbox.sh sub | grep -q 'https://s.example.com/[0-9a-f]\\{32\\}/clash' && ! grep -q 'listen 31000' '$(E)/generated/nginx/nginx.conf' && grep -q 'try_files /\$1/\$2 =404' '$(E)/generated/nginx/nginx.conf'"
+check "伪装站转发别的网站时，猜错的路径也交给那个网站" bash -c "bash dist/pbox.sh site source https://www.example.net --yes >/dev/null 2>&1; grep -q 'try_files /\$1/\$2 @pbox_site' '$(E)/generated/nginx/nginx.conf' && grep -q 'location @pbox_site' '$(E)/generated/nginx/nginx.conf'"
+check "体检检查订阅" bash -c "bash dist/pbox.sh doctor 2>&1 | grep -q '自建订阅可以取到'"
+check "菜单里可以开关" bash -c "printf '5\n6\n\n0\n0\n' | bash dist/pbox.sh >/dev/null 2>&1; grep -qx 'selfsub=0' '$(E)/state/global.env'"
+unset PBOX_TEST_DNS_A
+unset -f ss_path ss_port
+
 echo "下载镜像"
 eval "$(sed -n '/^mirror_norm()/,/^}/p' src/cores/core.sh)"
 check "镜像前缀末尾补上斜杠" test "$(mirror_norm https://m.example.com)" = 'https://m.example.com/'
