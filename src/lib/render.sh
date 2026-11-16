@@ -13,6 +13,16 @@ dns_doh_ip() {
 
 block_bt_on() { [ "$(gget block_bt 0)" = 1 ]; }
 
+# 出口优先：网站同时有 IPv4 和 IPv6 地址时，节点先用哪一种去连。只影响按域名访问的连接
+ip_strategy() { # <xray|singbox>
+  case "$1:$(gget ip_pref)" in
+    xray:v4) echo UseIPv4v6 ;;
+    xray:v6) echo UseIPv6v4 ;;
+    singbox:v4) echo prefer_ipv4 ;;
+    singbox:v6) echo prefer_ipv6 ;;
+  esac
+}
+
 # Xray 的入站要自己打开嗅探，路由才认得出 BT 和域名。只用于判断，不改连接的目的地
 xray_sniffing() {
   { block_bt_on || block_cn_on; } && printf '\n      "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true},'
@@ -20,19 +30,22 @@ xray_sniffing() {
 }
 
 core_render_base() {
-  local rules extra block doh
-  block=$(gget block_private 1) doh=$(dns_doh_ip)
+  local rules extra block doh pref ds dns resolver
+  block=$(gget block_private 1) doh=$(dns_doh_ip) pref=$(ip_strategy "$1")
   case "$1" in
     xray)
       rules=""
       [ "$block" = 1 ] && rules=$(printf '{"type": "field", "ip": [%s], "outboundTag": "block"}' "$PRIVATE_CIDRS")
       block_bt_on && rules="$rules${rules:+, }{\"type\": \"field\", \"protocol\": [\"bittorrent\"], \"outboundTag\": \"block\"}"
       block_cn_on && rules="$rules${rules:+, }{\"type\": \"field\", \"domain\": [\"ext:geosite-cn.dat:cn\"], \"outboundTag\": \"block\"}, {\"type\": \"field\", \"ip\": [\"ext:geoip-cn.dat:cn\"], \"outboundTag\": \"block\"}"
+      # 自己解析才能用上加密 DNS 和出口优先；两者都没开时交给系统
+      ds=$pref
+      [ -z "$ds" ] && [ -n "$doh" ] && ds=UseIP
       cat <<EOF
 {
   "log": {"loglevel": "error", "access": "none"},$([ -n "$doh" ] && printf '\n  "dns": {"servers": ["https://%s/dns-query"]},' "$doh")
   "outbounds": [
-    {"tag": "direct", "protocol": "freedom"$([ -n "$doh" ] && printf ', "settings": {"domainStrategy": "UseIP"}')},
+    {"tag": "direct", "protocol": "freedom"$([ -n "$ds" ] && printf ', "settings": {"domainStrategy": "%s"}' "$ds")},
     {"tag": "block", "protocol": "blackhole"}
   ],
   "routing": {$(block_cn_on && printf '\n    "domainStrategy": "IPIfNonMatch",')
@@ -56,15 +69,23 @@ EOF
       if block_bt_on || block_cn_on || [ -n "$extra" ]; then rules="$rules${rules:+, }{\"action\": \"sniff\"}"; fi
       block_bt_on && rules="$rules${rules:+, }{\"protocol\": \"bittorrent\", \"action\": \"reject\"}"
       # 先按域名拦；只知道 IP 的、名单外的域名，解析出地址后再按 IP 拦一次
-      block_cn_on && rules="$rules${rules:+, }{\"rule_set\": [\"geosite-cn\"], \"action\": \"reject\"}, {\"action\": \"resolve\"}, {\"rule_set\": [\"geoip-cn\"], \"action\": \"reject\"}"
+      block_cn_on && rules="$rules${rules:+, }{\"rule_set\": [\"geosite-cn\"], \"action\": \"reject\"}, {\"action\": \"resolve\"$([ -n "$pref" ] && printf ', "strategy": "%s"' "$pref")}, {\"rule_set\": [\"geoip-cn\"], \"action\": \"reject\"}"
       [ -n "$extra" ] && rules="$rules${rules:+, }$extra"
+      # 出口优先要经内核自己的解析器生效；没开加密 DNS 时用系统的解析
+      dns="" resolver=""
+      if [ -n "$doh" ]; then
+        dns=$(printf '{"servers": [{"type": "https", "tag": "dns-doh", "server": "%s"}], "final": "dns-doh"}' "$doh") resolver='"dns-doh"'
+      elif [ -n "$pref" ]; then
+        dns='{"servers": [{"type": "local", "tag": "dns-local"}]}' resolver='"dns-local"'
+      fi
+      [ -n "$pref" ] && resolver=$(printf '{"server": %s, "strategy": "%s"}' "$resolver" "$pref")
       cat <<EOF
 {
-  "log": {"level": "fatal", "timestamp": true},$([ -n "$doh" ] && printf '\n  "dns": {"servers": [{"type": "https", "tag": "dns-doh", "server": "%s"}], "final": "dns-doh"},' "$doh")
+  "log": {"level": "fatal", "timestamp": true},$([ -n "$dns" ] && printf '\n  "dns": %s,' "$dns")
   "outbounds": [
     {"type": "direct", "tag": "direct"}
   ],$(warp_endpoint_json)
-  "route": {$([ -n "$doh" ] && printf '\n    "default_domain_resolver": "dns-doh",')$(block_cn_on && printf '\n    "rule_set": [{"type": "local", "tag": "geosite-cn", "format": "binary", "path": "%s/geosite-cn.srs"}, {"type": "local", "tag": "geoip-cn", "format": "binary", "path": "%s/geoip-cn.srs"}],' "${BINDIR#"$R"}" "${BINDIR#"$R"}")
+  "route": {$([ -n "$resolver" ] && printf '\n    "default_domain_resolver": %s,' "$resolver")$(block_cn_on && printf '\n    "rule_set": [{"type": "local", "tag": "geosite-cn", "format": "binary", "path": "%s/geosite-cn.srs"}, {"type": "local", "tag": "geoip-cn", "format": "binary", "path": "%s/geoip-cn.srs"}],' "${BINDIR#"$R"}" "${BINDIR#"$R"}")
     "rules": [$rules]$(warp_final_json)
   }
 }

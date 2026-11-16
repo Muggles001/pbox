@@ -19,23 +19,23 @@ reality_candidates() {
 
 shuffle() { awk -v s="$(rand_int 1 999999)" 'BEGIN{srand(s)} {print rand() "\t" $0}' | sort -n | cut -f2-; }
 
-# reality_check <域名>：通过则输出连接耗时（秒）。
+# reality_check <域名>：通过则输出 TCP 握手的耗时（秒），不含域名解析：解析时快时慢，会掩盖远近。
 # 要求握手实际协商出 TLS 1.3 和 HTTP/2、证书校验通过、首页直接返回 200 而非跳转。
 reality_check() {
   local d="$1" out res
-  if testing; then echo 0.05; return 0; fi
+  if testing; then echo "${PBOX_TEST_RTT:-0.05}"; return 0; fi
   out=$(echo | timeout 8 openssl s_client -connect "$d:443" -servername "$d" -tls1_3 -alpn h2 2>/dev/null) || return 1
   printf '%s' "$out" | grep -q 'TLSv1.3' || return 1
   printf '%s' "$out" | grep -q 'ALPN protocol: h2' || return 1
   printf '%s' "$out" | grep -q 'Verify return code: 0 ' || return 1
-  res=$(curl -s -o /dev/null --max-time 8 -w '%{http_code} %{time_connect}' "https://$d/") || return 1
+  res=$(curl -s -o /dev/null --max-time 8 -w '%{http_code} %{time_namelookup} %{time_connect}' "https://$d/") || return 1
   case "$res" in 200\ *) ;; *) return 1 ;; esac
   # 目标在 CDN 后面时，本机会被当成那家 CDN 的转发点。这里只能识别 Cloudflare 一家。
   curl -s --max-time 5 "https://$d/cdn-cgi/trace" 2>/dev/null | grep -q '^colo=' && return 1
   # 以上条件都满足的网站，仍有少数拿来做 Reality 目标时握手不成功（实测约十六分之一）。
   # 所以最后真的握手一次：通过了才算可用。
   if [ -x "$BINDIR/sing-box" ]; then reality_handshake_ok "$d" || return 1; fi
-  echo "${res#* }"
+  echo "$res" | awk '{printf "%.3f\n", $3 - $2}'
 }
 
 # 在本机临时起一对 Reality 服务端和客户端，以 <域名> 为伪装目标，经由它实际访问一次外网。
@@ -79,10 +79,25 @@ EOF
   return $rc
 }
 
+# S4：伪装目标要和服务器所在的网络相称。从服务器握手的耗时超过这个值（秒），
+# 这个网站多半没有离服务器近的节点，比如东京的机器借用一个只在美国有服务器的网站。
+# 在东京实测，有本地节点的都在 10 毫秒以内，没有的在 90 毫秒以上
+REALITY_FAR=0.05
+reality_far() { awk -v a="$1" -v b="$REALITY_FAR" 'BEGIN { exit !(a > b) }'; }
+ms_of() { awk -v a="$1" 'BEGIN { printf "%d", a * 1000 }'; }
+
+# 用户自己指定的目标太远时提醒。--yes 时只提醒：目标是点名给的，已经是明确的选择
+reality_far_confirm() { # <域名> <连接耗时>
+  reality_far "$2" || return 0
+  warn "$(t s4_warn "$1" "$(ms_of "$2")")"
+  [ "$ASSUME_YES" = 1 ] && return 0
+  confirm_risk "$(t s_continue)"
+}
+
 # 随机顺序实测候选，凑够 5 个可用的就停，从最快的 3 个里随机取一个。
 # 不设尝试上限：候选的通过率因机房而异，设了上限就会偶尔一个都挑不到。
 reality_pick() {
-  local d tm passed="" n=0 round
+  local d tm passed="" n=0 round pool
   if testing && [ -n "${PBOX_TEST_SNI:-}" ]; then echo "$PBOX_TEST_SNI"; return 0; fi
   # 网络一时抖动可能让整轮都测不过，所以一个都没挑到时再来一轮
   for round in 1 2; do
@@ -99,7 +114,10 @@ reality_pick() {
   [ "$n" -gt 0 ] || return 1
   # 用 sed 取前几行而不是 head：head 读够就退出，会让前面的命令收到管道关闭的信号，
   # 在开启了 pipefail 的情况下整条管道会被判为失败，表现为偶发的"没有找到可用的伪装目标"
-  printf '%s' "$passed" | sort -n | sed -n '1,3p' | shuffle | sed -n '1p' | awk '{print $2}'
+  # 有离得近的就只在近的里挑；都很远（服务器所在地区候选少）时才退而求其次
+  pool=$(printf '%s' "$passed" | awk -v f="$REALITY_FAR" '$1 <= f')
+  [ -n "$pool" ] || pool="$passed"
+  printf '%s\n' "$pool" | sort -n | sed -n '1,3p' | shuffle | sed -n '1p' | awk '{print $2}'
 }
 
 # 自签证书用的域名：只需要像个正常域名，不需要实测。
@@ -107,10 +125,12 @@ random_sni() { reality_candidates | shuffle | sed -n '1p'; }
 
 # 伪装目标（ShadowTLS 的握手对象同理）：用户指定的先验证，没指定就自动挑。结果在 REPLY
 reality_sni_choose() { # <选项名，如 REALITY_SNI>
+  local tm
   REPLY=$(opt "$1")
   if [ -n "$REPLY" ]; then
     valid_domain "$REPLY" || die "$(t bad_domain "$REPLY")"
-    reality_check "$REPLY" >/dev/null || die "$(t reality_bad_target "$REPLY")"
+    tm=$(reality_check "$REPLY") || die "$(t reality_bad_target "$REPLY")"
+    reality_far_confirm "$REPLY" "$tm" || die "$(t cancelled)"
   else
     say "$(t reality_picking)"
     spin_start "$(t spin_wait)"
@@ -122,10 +142,15 @@ reality_sni_choose() { # <选项名，如 REALITY_SNI>
 # 体检：协议 <id> 借用的那个网站还合不合用。
 # 对外的探测偶尔会因为网络抖动失败一次，所以再试一次才下结论
 d_reality_target() { # <协议> <通过的文案> <不通过的文案>
-  local sni
+  local sni tm
   sni=$(pget "$1" sni)
-  if reality_check "$sni" >/dev/null || { sleep 2; reality_check "$sni" >/dev/null; }; then
+  if tm=$(reality_check "$sni") || { sleep 2; tm=$(reality_check "$sni"); }; then
     ok "$(t "$2" "$sni")"
+    # 太远只是不够自然，节点照常能用，所以只提醒
+    if reality_far "$tm"; then
+      note "$(t d_reality_far "$sni" "$(ms_of "$tm")")"
+      hint "pbox change $1 sni auto"
+    fi
   else
     bad "$(t "$3" "$sni")"
     hint "pbox change $1 sni auto"

@@ -384,7 +384,8 @@ cmd_change() {
         spin_stop
       else
         valid_domain "$val" || { txn_abort; die "$(t bad_domain "$val")"; }
-        reality_check "$val" >/dev/null || { txn_abort; die "$(t reality_bad_target "$val")"; }
+        o=$(reality_check "$val") || { txn_abort; die "$(t reality_bad_target "$val")"; }
+        reality_far_confirm "$val" "$o" || { txn_abort; die "$(t cancelled)"; }
       fi
       pset "$id" sni "$val"
       ;;
@@ -413,6 +414,15 @@ addr_mode_check() {
   if [ -n "$ip4" ] && ! resolve A "$dom" | grep -qxF "$ip4"; then die "$(t addr_missing A "$dom" "$ip4")"; fi
   if [ -n "$ip6" ] && ! resolve AAAA "$dom" | grep -qxF "$ip6"; then die "$(t addr_missing AAAA "$dom" "$ip6")"; fi
   return 0
+}
+
+# 本机能不能经 IPv4 或 IPv6 访问外网：真的连一次
+ip_egress_ok() { # <v4|v6>
+  local ip
+  ip=$(gget "ip${1#v}")
+  [ -n "$ip" ] || return 1
+  testing && return 0
+  curl -s -o /dev/null "-${1#v}" --max-time 8 https://www.cloudflare.com/cdn-cgi/trace
 }
 
 # pbox set addr-mode <split|merged|all> [域名]
@@ -470,6 +480,17 @@ cmd_set() {
       case "$val" in on) gset block_bt 1 ;; off) gset block_bt 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
       ;;
     block-cn) geo_block_set "$val" ;;
+    ip-pref)
+      case "$val" in
+        auto | off) gset ip_pref "" ;;
+        v4 | v6)
+          # 本机这一种出口不通时，优先它只会让节点变慢或打不开
+          ip_egress_ok "$val" || { txn_abort; die "$(t ip_pref_bad "$(echo "$val" | sed 's/v/IPv/')")"; }
+          gset ip_pref "$val"
+          ;;
+        *) txn_abort; die "$(t set_usage)" ;;
+      esac
+      ;;
     dns)
       case "$val" in
         system | off) gset dns "" ;;
@@ -586,6 +607,7 @@ pbox $PBOX_VERSION
   pbox set compact-nodes <on|off|auto|PROTOCOLS>
   pbox set block-bt <on|off>   pbox set block-cn <on|off>
   pbox set dns <system|cloudflare|google|quad9>
+  pbox set ip-pref <auto|v4|v6>
   pbox user [list|add NAME [PROTOCOLS]|protocols NAME <LIST|all>|del NAME|show NAME|reset NAME]
   pbox sub [setup|show [NAME]|push|off]
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]

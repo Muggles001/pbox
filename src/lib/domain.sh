@@ -147,7 +147,7 @@ domain_precheck() { # <域名> [dns]
   fi
   [ "$(gget nat 0)" = 1 ] && die "$(t dom_nat)"
   if is_ip4 "$dom"; then
-    if ! testing && port_in_use tcp 80; then
+    if port_in_use tcp 80; then
       owner=$(port_owner tcp 80)
       die "$(t dom_80_busy "${owner:-?}")"
     fi
@@ -160,9 +160,9 @@ domain_precheck() { # <域名> [dns]
   if ! { [ -n "$ip4" ] && resolve A "$dom" | grep -qxF "$ip4"; } && ! { [ -n "$ip6" ] && resolve AAAA "$dom" | grep -qxF "$ip6"; }; then
     die "$(t dom_wrong_dns "$dom" "$got" "${ip4:-$ip6}")"
   fi
-  if ! testing && port_in_use tcp 80; then
+  if port_in_use tcp 80; then
     owner=$(port_owner tcp 80)
-    die "$(t dom_80_busy "${owner:-?}")"
+    die "$(t dom_80_busy "${owner:-?}") $(t dom_80_dns "$dom")"
   fi
   return 0
 }

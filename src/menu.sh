@@ -336,6 +336,7 @@ menu_settings() {
     item 7 mset_lang mset_lang_d
     printf "$T_m_fmt" 8 "$(t mset_warp)" "${C_D}[$(onoff "$([ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && echo 1 || echo 0)")] $(t mset_warp_d)${C_0}"
     printf "$T_m_fmt" 9 "$(t mset_bbr)" "${C_D}[$(onoff "$([ "$(bbr_cur)" = bbr ] && echo 1 || echo 0)")] $(t mset_bbr_d)${C_0}"
+    printf "$T_m_fmt" i "$(t mset_ippref)" "${C_D}[$(gget ip_pref auto)] $(t mset_ippref_d)${C_0}"
     printf "$T_m_fmt" d "$(t mset_domain)" "${C_D}[$(gget tls_domain -)] $(t mset_domain_d)${C_0}"
     printf "$T_m_fmt" n "$(t mset_compact)" "${C_D}[$(onoff "$(gget compact_nodes 0)")] $(t mset_compact_d)${C_0}"
     printf "$T_m_fmt" r "$(t mset_relay)" "${C_D}[$(relay_keys fwd | wc -l | tr -d ' ')/$(relay_keys via | wc -l | tr -d ' ')] $(t mset_relay_d)${C_0}"
@@ -364,6 +365,10 @@ menu_settings() {
         v=on
         [ "$(bbr_cur)" = bbr ] && v=off
         run cmd_bbr "$v"
+        ;;
+      i | I)
+        ask " $(t mset_ask_ippref)" "auto"
+        run cmd_set ip-pref "$REPLY"
         ;;
       d | D) menu_domain ;;
       n | N) menu_compact ;;

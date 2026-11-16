@@ -16,6 +16,20 @@ ver_newer() { # <线上标签，如 v1.2.3> <本机版本>
   return 1
 }
 
+# 列出比本机新的那些版本各改了什么。清单每行"版本<TAB>一句话"，新版本在前，见 tools/changes.sh。
+# 太长时只列前面的，免得新手面对一整屏；有内容可列时返回成功
+UPD_SHOW_MAX=12
+update_changes() { # <清单文件> <本机版本>
+  local tag line n=0
+  while IFS=$'\t' read -r tag line; do
+    [ -n "$line" ] && ver_newer "$tag" "$2" || continue
+    n=$((n + 1))
+    [ "$n" -le "$UPD_SHOW_MAX" ] && printf '  %-8s %s\n' "$tag" "$line"
+  done <"$1"
+  [ "$n" -gt "$UPD_SHOW_MAX" ] && say "  $(t upd_more $((n - UPD_SHOW_MAX)))"
+  [ "$n" -gt 0 ]
+}
+
 # 打开菜单时调用：每 6 小时最多联网一次，两秒超时，只提示不更新。可用 pbox set update-check off 关闭。
 update_notice() {
   local cache="$LIBDIR/update.cache" now last tag
@@ -51,10 +65,14 @@ cmd_update() {
     say "$(t upd_latest "$PBOX_VERSION")"
   else
     say "$(t upd_found "$PBOX_VERSION" "$tag")"
-    say "  https://github.com/$PBOX_REPO/releases/tag/$tag"
-    confirm "$(t upd_q)" || die "$(t cancelled)"
     base="https://github.com/$PBOX_REPO/releases/download/$tag"
     tmp=$(mktemp -d)
+    # 清单拿不到不影响更新，只是少了这段说明
+    if fetch --max-time 10 -o "$tmp/changes.txt" "$base/changes.txt" 2>/dev/null; then
+      update_changes "$tmp/changes.txt" "$PBOX_VERSION" || true
+    fi
+    say "  $(t upd_link "https://github.com/$PBOX_REPO/releases/tag/$tag")"
+    confirm "$(t upd_q)" || { rm -rf "$tmp"; die "$(t cancelled)"; }
     spin_start "$(t spin_wait)"
     fetch -o "$tmp/pbox.sh" "$base/pbox.sh" && fetch -o "$tmp/sum" "$base/pbox.sh.sha256" || { rm -rf "$tmp"; die "$(t upd_fail)"; }
     spin_stop

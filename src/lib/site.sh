@@ -372,9 +372,9 @@ site_cdn_set() { # <子域名>
   elif ! { [ -n "$ip4" ] && resolve A "$h" | grep -qxF "$ip4"; } && ! { [ -n "$ip6" ] && resolve AAAA "$h" | grep -qxF "$ip6"; }; then
     die "$(t cdn_no_dns "$h" "${ip4:-$ip6}")"
   fi
-  if [ "$method" != dns ] && ! testing && port_in_use tcp 80; then
+  if [ "$method" != dns ] && port_in_use tcp 80; then
     owner=$(port_owner tcp 80)
-    die "$(t dom_80_busy "${owner:-?}")"
+    die "$(t dom_80_busy "${owner:-?}") $(t dom_80_dns "$(gget tls_domain)")"
   fi
   head1 "$(t cdn_plan_title)"
   say "$(t cdn_plan "$h" "$(gget tls_domain)")"

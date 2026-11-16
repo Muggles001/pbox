@@ -45,6 +45,19 @@ vn_not() { ! ver_newer "$@"; }
 check "版本相同不算" vn_not v0.3.0 0.3.0
 check "本机比线上新时不提示" vn_not v0.2.0 0.3.0
 
+eval "$(sed -n '/^update_changes()/,/^}/p' src/lib/update.sh)"
+say() { printf '%s\n' "$*"; }
+t() { printf 'more %s' "$2"; }
+cl=$(mktemp)
+printf 'v0.3.0\t新增丙\nv0.3.0\t修好乙\nv0.2.0\t新增甲\nv0.1.0\t最初\n' >"$cl"
+uc_tags() { UPD_SHOW_MAX=12 update_changes "$cl" "$1" | awk '{print $1}' | tr '\n' ' '; }
+uc_short() { local out; out=$(UPD_SHOW_MAX=2 update_changes "$cl" 0.1.0); [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = 3 ] && printf '%s\n' "$out" | tail -1 | grep -q 'more 1'; }
+uc_none() { ! UPD_SHOW_MAX=12 update_changes "$cl" 0.3.0; }
+check "改动清单只列比本机新的版本" test "$(uc_tags 0.1.0)" = 'v0.3.0 v0.3.0 v0.2.0 '
+check "改动清单太长时只列前几条并说还剩几条" uc_short
+check "已是最新时没有可列的" uc_none
+unset -f say t
+
 echo "安装（推荐档）"
 new_root
 check "自选协议时一路回车，只开推荐的" bash -c "R=\$(mktemp -d) && { printf 'c\\n'; yes ''; } | head -60 | PBOX_ROOT=\$R bash dist/pbox.sh install >/dev/null 2>&1; [ \"\$(ls \$R/etc/pbox/state/protocols | tr '\\n' ' ')\" = 'hysteria2.env reality-vision.env ' ]"
@@ -307,6 +320,8 @@ PBOX_PROTOCOLS="reality-vision hysteria2 tuic anytls" pbox install --yes >/dev/n
 check "解析没指向本机时在申请前就拒绝" bash -c "! PBOX_TEST_DNS_A=198.51.100.9 bash dist/pbox.sh domain set a.example.com --yes"
 check "没有解析记录时拒绝" bash -c "! bash dist/pbox.sh domain set a.example.com --yes"
 export PBOX_TEST_DNS_A=203.0.113.10
+check "80 端口被占用时拒绝，并指出接口验证这条路" bash -c "PBOX_TEST_PORTS=tcp/80 bash dist/pbox.sh domain set a.example.com --yes 2>&1 | grep -F 'pbox domain set a.example.com dns' >/dev/null && ! grep -q '^tls_domain=.' '$(E)/state/global.env'"
+check "接口验证不受 80 端口占用影响" bash -c "PBOX_TEST_PORTS=tcp/80 PBOX_CF_TOKEN=x bash dist/pbox.sh domain set a.example.com dns --yes && bash dist/pbox.sh domain off --yes"
 check "设置域名" pbox domain set A.Example.com --yes
 check "域名统一成小写保存" grep -qx 'tls_domain=a.example.com' "$(E)/state/global.env"
 check "三个协议的服务端都改用域名证书" bash -c "for p in hysteria2 tuic anytls; do grep -q 'certs/domain.crt' '$(E)/generated/sing-box/'*\$p.json || exit 1; done"
@@ -510,6 +525,37 @@ sys.exit(not ([t[\"tag\"] for t in s[\"rule_set\"]]==[\"geosite-cn\",\"geoip-cn\
 check "关掉屏蔽回国后规则去掉" bash -c "bash dist/pbox.sh set block-cn off --yes && ! grep -q geoip-cn '$sb' && ! grep -q geoip-cn '$xr'"
 check "不认识的解析器被拒绝" bash -c "! bash dist/pbox.sh set dns 1.2.3.4 --yes"
 check "都关掉后回到原样" bash -c "bash dist/pbox.sh set dns system --yes && bash dist/pbox.sh set block-bt off --yes && ! grep -q sniff '$sb' && ! grep -q '\"dns\"' '$sb' && ! grep -q '\"dns\"' '$xr' && python3 -m json.tool '$xr' >/dev/null"
+
+echo "出口优先"
+new_root
+PBOX_PROTOCOLS="reality-vision reality-xhttp" pbox install --yes >/dev/null 2>&1
+sb="$(E)/generated/sing-box/00_base.json"
+xr="$(E)/generated/xray/00_base.json"
+check "默认不设优先" bash -c "! grep -q '\"dns\"' '$sb' && ! grep -q domainStrategy '$xr'"
+check "优先 IPv6：sing-box 经系统解析按 IPv6 优先，Xray 同样" bash -c "bash dist/pbox.sh set ip-pref v6 --yes && python3 -c 'import json,sys
+s=json.load(open(sys.argv[1])); x=json.load(open(sys.argv[2]))
+sys.exit(not (s[\"dns\"][\"servers\"]==[dict(type=\"local\",tag=\"dns-local\")] and s[\"route\"][\"default_domain_resolver\"]==dict(server=\"dns-local\",strategy=\"prefer_ipv6\") and x[\"outbounds\"][0][\"settings\"][\"domainStrategy\"]==\"UseIPv6v4\"))' '$sb' '$xr'"
+check "和加密 DNS 一起开时用加密的解析器" bash -c "bash dist/pbox.sh set dns quad9 --yes && bash dist/pbox.sh set ip-pref v4 --yes && python3 -c 'import json,sys
+s=json.load(open(sys.argv[1])); x=json.load(open(sys.argv[2]))
+sys.exit(not (s[\"dns\"][\"servers\"][0][\"tag\"]==\"dns-doh\" and len(s[\"dns\"][\"servers\"])==1 and s[\"route\"][\"default_domain_resolver\"]==dict(server=\"dns-doh\",strategy=\"prefer_ipv4\") and x[\"outbounds\"][0][\"settings\"][\"domainStrategy\"]==\"UseIPv4v6\"))' '$sb' '$xr'"
+check "屏蔽回国时提前解析也按优先顺序" bash -c "bash dist/pbox.sh set block-cn on --yes && grep -q '\"action\": \"resolve\", \"strategy\": \"prefer_ipv4\"' '$sb' && python3 -m json.tool '$sb' >/dev/null && bash dist/pbox.sh set block-cn off --yes"
+check "改回 auto 后回到原样" bash -c "bash dist/pbox.sh set ip-pref auto --yes && bash dist/pbox.sh set dns system --yes && ! grep -q '\"dns\"' '$sb' && ! grep -q domainStrategy '$xr'"
+check "本机没有 IPv6 时不能优先它" bash -c "R=\$(mktemp -d); export PBOX_ROOT=\$R PBOX_TEST_IP6=; bash dist/pbox.sh install --yes >/dev/null 2>&1 && ! bash dist/pbox.sh set ip-pref v6 --yes && bash dist/pbox.sh set ip-pref v4 --yes"
+check "写错时拒绝" bash -c "! bash dist/pbox.sh set ip-pref ipv6 --yes"
+
+echo "伪装目标离服务器太远"
+new_root
+pbox install --yes >/dev/null 2>&1
+check "离得近的直接换" bash -c "PBOX_TEST_RTT=0.03 bash dist/pbox.sh change reality-vision sni www.example.net --yes && grep -qx 'sni=www.example.net' '$(E)/state/protocols/reality-vision.env'"
+check "太远时提醒，不确认就不换" bash -c "printf '\n' | PBOX_TEST_RTT=0.3 bash dist/pbox.sh change reality-vision sni www.example.com 2>&1 | grep '300 毫秒' >/dev/null; grep -qx 'sni=www.example.net' '$(E)/state/protocols/reality-vision.env'"
+check "确认后照换" bash -c "printf 'y\n' | PBOX_TEST_RTT=0.3 bash dist/pbox.sh change reality-vision sni www.example.com >/dev/null 2>&1; grep -qx 'sni=www.example.com' '$(E)/state/protocols/reality-vision.env'"
+check "--yes 时只提醒" bash -c "PBOX_TEST_RTT=0.3 bash dist/pbox.sh change reality-vision sni www.example.org --yes 2>&1 | grep '毫秒' >/dev/null && grep -qx 'sni=www.example.org' '$(E)/state/protocols/reality-vision.env'"
+check "安装时指定的目标同样检查，不确认就不装" bash -c "R=\$(mktemp -d); printf '\n\n' | PBOX_ROOT=\$R PBOX_TEST_RTT=0.3 PBOX_PROTOCOLS=reality-vision PBOX_REALITY_SNI=www.example.net bash dist/pbox.sh install >\$R/out.txt 2>&1; grep -q '毫秒' \$R/out.txt && test ! -e \$R/etc/pbox"
+eval "$(sed -n '/^REALITY_FAR=/p; /^reality_far()/p; /^ms_of()/p' src/lib/reality.sh)"
+far_not() { ! reality_far "$1"; }
+check "50 毫秒以内算近" far_not 0.05
+check "超过 50 毫秒算远" reality_far 0.051
+check "耗时换算成毫秒" test "$(ms_of 0.3)" = 300
 
 echo "连不上向导"
 new_root
