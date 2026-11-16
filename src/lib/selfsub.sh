@@ -146,6 +146,7 @@ selfsub_notes() {
   local cdn
   selfsub_mode >/dev/null || return 0
   note "$(t selfsub_url_note)"
+  sub_enabled || note "$(t selfsub_local_note)"
   cdn=$(gget cdn_host)
   if [ "$(selfsub_mode)" = site ] && [ -n "$cdn" ]; then note "$(t selfsub_cdn_note "$cdn")"; fi
   if selfsub_port_on && [ "$(gget nat 0)" = 1 ] && [ -z "$(gget selfsub_ext_port)" ]; then note "$(t selfsub_nat_note "$(gget selfsub_port)")"; fi

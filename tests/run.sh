@@ -637,6 +637,8 @@ pbox site on --yes >/dev/null 2>&1
 check "开了伪装站就挂到 443 的网站上，不再单独开端口" bash -c "bash dist/pbox.sh sub | grep -q 'https://s.example.com/[0-9a-f]\\{32\\}/clash' && ! grep -q 'listen 31000' '$(E)/generated/nginx/nginx.conf' && grep -q 'try_files /\$1/\$2 =404' '$(E)/generated/nginx/nginx.conf'"
 check "伪装站转发别的网站时，猜错的路径也交给那个网站" bash -c "bash dist/pbox.sh site source https://www.example.net --yes >/dev/null 2>&1; grep -q 'try_files /\$1/\$2 @pbox_site' '$(E)/generated/nginx/nginx.conf' && grep -q 'location @pbox_site' '$(E)/generated/nginx/nginx.conf'"
 check "体检检查订阅" bash -c "bash dist/pbox.sh doctor 2>&1 | grep -q '自建订阅可以取到'"
+check "说明只含本机节点，合并多台机器要用私有仓库" bash -c "bash dist/pbox.sh sub | grep -q '只能用 GitLab 私有仓库'"
+check "只开了自建订阅时，合并机器的命令指向私有仓库" bash -c "! bash dist/pbox.sh sub machines >'$PBOX_ROOT/m.txt' 2>&1; grep -q '合并多台机器只能用 GitLab' '$PBOX_ROOT/m.txt' && ! bash dist/pbox.sh sub invite 2>/dev/null"
 check "菜单里可以开关" bash -c "printf '5\n6\n\n0\n0\n' | bash dist/pbox.sh >/dev/null 2>&1; grep -qx 'selfsub=0' '$(E)/state/global.env'"
 unset PBOX_TEST_DNS_A
 unset -f ss_path ss_port

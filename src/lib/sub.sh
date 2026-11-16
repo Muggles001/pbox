@@ -304,7 +304,7 @@ sub_show() { # [用户]
 # 列出同一个仓库里的各台机器
 sub_machines() {
   local tmp mid kind m tag
-  sub_enabled || die "$(t sub_not_set)"
+  sub_enabled || die "$(t sub_repo_only)"
   SUB_API=$(sub_api "$(sub_get project)") SUB_BR=$(sub_get branch main)
   tmp=$(mktemp -d)
   SUB_HDR="$tmp/h"
@@ -330,7 +330,7 @@ sub_forget() { # <标签>
   local tag="${1:-}" tmp m
   need_root
   need_installed
-  sub_enabled || die "$(t sub_not_set)"
+  sub_enabled || die "$(t sub_repo_only)"
   [ -n "$tag" ] || die "$(t sub_forget_hint)"
   SUB_API=$(sub_api "$(sub_get project)") SUB_BR=$(sub_get branch main)
   tmp=$(mktemp -d)
@@ -350,7 +350,7 @@ sub_invite() {
   local code
   need_root
   need_installed
-  sub_enabled || die "$(t sub_not_set)"
+  sub_enabled || die "$(t sub_repo_only)"
   code=$(printf '%s\n%s\n%s\n' "$(sub_get project)" "$(sub_get wtoken)" "$(sub_get rtoken)" | openssl base64 -A)
   head1 "$(t sub_invite_title)"
   say "$(t sub_invite_intro)"
@@ -431,7 +431,7 @@ sub_off() {
   local k
   need_root
   need_installed
-  sub_enabled || die "$(t sub_not_set)"
+  sub_enabled || die "$(t sub_repo_not_set)"
   sub_leave || warn "$(t sub_leave_fail)"
   for k in project branch wtoken rtoken; do kv_set "$STATE/global.env" "sub_$k" ""; done
   say "$(t sub_off_done)"
@@ -445,7 +445,7 @@ cmd_sub() {
     push)
       need_root
       need_installed
-      sub_enabled || die "$(t sub_not_set)"
+      sub_enabled || die "$(t sub_repo_not_set)"
       nodes_write
       if sub_push force; then say "$(t sub_push_ok)"; else die "$(t sub_push_fail)"; fi
       ;;
