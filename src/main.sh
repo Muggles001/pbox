@@ -41,6 +41,7 @@ main() {
     relay) cmd_relay "$@" ;;
     firewall) cmd_firewall ;;
     rollback) cmd_rollback ;;
+    restart) cmd_restart ;;
     log) cmd_log "$@" ;;
     backup) cmd_backup "$@" ;;
     restore) cmd_restore "$@" ;;

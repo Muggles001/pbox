@@ -90,6 +90,22 @@ else
   check "从备份恢复到干净系统" $P restore /tmp/pbox-vm.bin --yes
   check "恢复后服务运行中" bash -c 'sleep 1; systemctl is-active --quiet pbox-singbox'
   $P uninstall --yes >/dev/null 2>&1
+
+  # 系统防火墙：只在流水线里打开，会改动本机的 ufw。先放行 SSH，免得在远程机器上把自己关在门外
+  if [ "${PBOX_VM_UFW:-0}" = 1 ] && command -v ufw >/dev/null; then
+    echo "ufw"
+    ufw allow 22/tcp >/dev/null
+    ufw --force enable >/dev/null
+    allowed() { ufw status | grep -E "^$1 +ALLOW" >/dev/null; }
+    check "ufw 开着时安装" $P install --yes
+    check "放行了 Reality 与 Hysteria2 的端口" bash -c "$(declare -f allowed); allowed $(port_of reality-vision)/tcp && allowed $(port_of hysteria2)/udp"
+    check "改端口后放行新的、撤销旧的" bash -c "$(declare -f allowed); $P change reality-vision port 24443 --yes && allowed 24443/tcp && ! allowed 443/tcp"
+    check "端口跳跃放行整段" bash -c "$(declare -f allowed); $P change hysteria2 hop on --yes && r=\$(sed -n 's/^hop_range=//p' /etc/pbox/state/protocols/hysteria2.env) && allowed \${r%-*}:\${r#*-}/udp"
+    check "ufw 下体检全过" $P doctor
+    check "卸载后只剩自己加的 SSH 规则" bash -c "$P uninstall --yes && [ -z \"\$(ufw status | grep ALLOW | grep -v '^22/tcp')\" ]"
+    ufw --force disable >/dev/null
+    ufw delete allow 22/tcp >/dev/null
+  fi
 fi
 
 echo

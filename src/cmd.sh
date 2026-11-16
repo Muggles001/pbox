@@ -189,6 +189,9 @@ cmd_install() {
 do_uninstall() {
   local kind val
   bbr_ours && bbr_off >/dev/null
+  # 定时器的启用链接不在清单里，只删文件会留下一个失效的链接
+  domain_timer off
+  restart_timer off
   sub_leave || warn "$(t sub_leave_fail)"
   if [ -f "$MANIFEST" ]; then
     grep '^svc	' "$MANIFEST" | cut -f2 | while read -r val; do svc_remove "$val"; done
@@ -480,6 +483,14 @@ cmd_set() {
       case "$val" in on) gset block_bt 1 ;; off) gset block_bt 0 ;; *) txn_abort; die "$(t set_usage)" ;; esac
       ;;
     block-cn) geo_block_set "$val" ;;
+    restart)
+      case "$val" in
+        off) gset restart_at "" ;;
+        on) gset restart_at 04:00 ;;
+        [01][0-9]:[0-5][0-9] | 2[0-3]:[0-5][0-9]) gset restart_at "$val" ;;
+        *) txn_abort; die "$(t set_usage)" ;;
+      esac
+      ;;
     ip-pref)
       case "$val" in
         auto | off) gset ip_pref "" ;;
@@ -512,8 +523,13 @@ cmd_set() {
       ;;
     *) txn_abort; die "$(t set_usage)" ;;
   esac
-  edit_end
+  # 只有这几项会改变节点；其余只影响服务器这一侧，不必让用户去更新链接
+  case "$key" in addr-mode | region | compact-nodes) edit_end ;; *) edit_end same ;; esac
   if [ "$key" = block-cn ] && [ "$val" = on ]; then note "$(t note_block_cn)"; fi
+  if [ "$key" = restart ] && [ "$DRY_RUN" != 1 ]; then
+    restart_timer "$(kv_get "$STATE/global.env" restart_at off)"
+    [ -n "$(kv_get "$STATE/global.env" restart_at)" ] && note "$(t restart_set "$(kv_get "$STATE/global.env" restart_at)")"
+  fi
   return 0
 }
 
@@ -529,6 +545,20 @@ cmd_nodes() {
   else
     nodes_show
   fi
+}
+
+# 手动或定时重启内核。Nginx 和隧道不动
+cmd_restart() {
+  local core
+  need_root
+  need_installed
+  detect_sys
+  lock
+  for core in $(cores_needed); do
+    [ "$core" = nginx ] && continue
+    testing || svc restart "$(core_svc "$core")" || warn "$(t restart_fail "$(core_title "$core")")"
+  done
+  say "$(t restart_done)"
 }
 
 cmd_rollback() {
@@ -608,6 +638,7 @@ pbox $PBOX_VERSION
   pbox set block-bt <on|off>   pbox set block-cn <on|off>
   pbox set dns <system|cloudflare|google|quad9>
   pbox set ip-pref <auto|v4|v6>
+  pbox set restart <off|on|HH:MM>   pbox restart
   pbox user [list|add NAME [PROTOCOLS]|protocols NAME <LIST|all>|del NAME|show NAME|reset NAME]
   pbox sub [setup|show [NAME]|push|off]
   pbox sub [machines|name LABEL|invite|join CODE|forget LABEL]

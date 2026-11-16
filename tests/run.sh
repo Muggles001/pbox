@@ -557,6 +557,42 @@ check "50 毫秒以内算近" far_not 0.05
 check "超过 50 毫秒算远" reality_far 0.051
 check "耗时换算成毫秒" test "$(ms_of 0.3)" = 300
 
+echo "体检报告脱敏"
+new_root
+PBOX_PROTOCOLS="reality-vision hysteria2" pbox install --yes >/dev/null 2>&1
+PBOX_TEST_DNS_A=203.0.113.10 pbox domain set r.example.com --yes >/dev/null 2>&1
+pbox doctor --report >"$PBOX_ROOT/rep.txt" 2>&1
+check "报告里有体检结果和版本" bash -c "grep -q '体检' '$PBOX_ROOT/rep.txt' && grep -q '^pbox ' '$PBOX_ROOT/rep.txt'"
+check "报告里没有本机 IP 和证书域名" bash -c "! grep -qE '203\.0\.113\.10|2001:db8::10|r\.example\.com' '$PBOX_ROOT/rep.txt' && grep -q '<IPv4>' '$PBOX_ROOT/rep.txt'"
+eval "$(sed -n '/^doctor_redact()/,/^}/p' src/lib/doctor.sh)"
+redact_words() { printf '<domain>\tr.example.com\n<cdn-domain>\tcdn.r.example.com\n<relay>\tland.example.net\n'; }
+say() { :; }
+PBOX_VERSION=test
+red() { printf '%s\n' "$1" | doctor_redact; }
+check "长的先换：子域名整体换掉，不留前缀" test "$(red 'cdn.r.example.com r.example.com')" = '<cdn-domain> <domain>'
+check "名单外的 IPv4 也隐去，回环地址保留" test "$(red '连到 198.51.100.7:23123，本机 127.0.0.1')" = '连到 <IP>:23123，本机 127.0.0.1'
+check "域名里的点按字面匹配" test "$(red 'land-example.net land.example.net')" = 'land-example.net <relay>'
+unset -f redact_words say red
+
+echo "定时重启"
+new_root
+pbox install --yes >/dev/null 2>&1
+check "默认关闭" bash -c "! grep -q '^restart_at=.' '$(E)/state/global.env'"
+check "设定时间" bash -c "bash dist/pbox.sh set restart 04:30 --yes 2>&1 | grep -q '04:30' && grep -qx 'restart_at=04:30' '$(E)/state/global.env'"
+check "on 等于凌晨四点" bash -c "bash dist/pbox.sh set restart on --yes && grep -qx 'restart_at=04:00' '$(E)/state/global.env'"
+check "时间写错时拒绝" bash -c "! bash dist/pbox.sh set restart 24:00 --yes && ! bash dist/pbox.sh set restart 4:00 --yes && grep -qx 'restart_at=04:00' '$(E)/state/global.env'"
+check "关闭" bash -c "bash dist/pbox.sh set restart off --yes && ! grep -q '^restart_at=.' '$(E)/state/global.env'"
+check "立即重启" bash -c "bash dist/pbox.sh restart | grep -q 已重启"
+check "菜单里可以设置" bash -c "printf '6\nt\n05:15\n\n0\n0\n' | bash dist/pbox.sh >/dev/null 2>&1; grep -qx 'restart_at=05:15' '$(E)/state/global.env'"
+
+echo "下载镜像"
+eval "$(sed -n '/^mirror_norm()/,/^}/p' src/cores/core.sh)"
+check "镜像前缀末尾补上斜杠" test "$(mirror_norm https://m.example.com)" = 'https://m.example.com/'
+check "已有斜杠时不重复" test "$(mirror_norm https://m.example.com/gh/)" = 'https://m.example.com/gh/'
+mn_bad() { ! mirror_norm "$1"; }
+check "不是 https 的拒绝" mn_bad http://m.example.com
+check "空的拒绝" mn_bad ""
+
 echo "连不上向导"
 new_root
 PBOX_PROTOCOLS="reality-vision hysteria2 anytls" pbox install --yes >/dev/null 2>&1

@@ -40,6 +40,28 @@ cores_needed() {
   if site_on_p; then echo nginx; fi
 }
 
+# 直连下载失败时问一次镜像，用户填了就记在 PBOX_MIRROR 里，本次运行后面的下载都用它。
+# 文件的哈希写死在脚本里，镜像替换不了内容，所以可以放心用。
+# 只在前台交互时问：并行下载在后台进行，问不了，由 cores_ensure 失败后补问
+mirror_ask() {
+  [ -n "${PBOX_MIRROR:-}" ] && return 0
+  { [ "$ASSUME_YES" = 1 ] || [ ! -t 0 ] || [ -n "${MIRROR_ASKED:-}" ]; } && return 1
+  MIRROR_ASKED=1
+  ask "$(t mirror_q)" ""
+  REPLY=$(mirror_norm "$REPLY") || return 1
+  PBOX_MIRROR="$REPLY"
+  export PBOX_MIRROR
+}
+
+# 镜像前缀：必须是 https，末尾补上斜杠，完整的下载地址接在它后面
+mirror_norm() {
+  case "$1" in
+    https://?*/) printf '%s' "$1" ;;
+    https://?*) printf '%s/' "$1" ;;
+    *) return 1 ;;
+  esac
+}
+
 # dl_verify <网址> <期望的 SHA256> <保存路径>
 # 来源可以是离线目录、直连或用户指定的镜像；无论哪种，哈希不符一律拒绝。
 dl_verify() {
@@ -49,7 +71,7 @@ dl_verify() {
     [ -f "$PBOX_OFFLINE/$base" ] || { warn "$(t dl_offline_missing "$PBOX_OFFLINE/$base")"; return 1; }
     cp "$PBOX_OFFLINE/$base" "$out"
   elif ! fetch ${PBOX_PROXY:+-x "$PBOX_PROXY"} --retry 2 --connect-timeout 15 -o "$out" "$url"; then
-    [ -n "${PBOX_MIRROR:-}" ] || { warn "$(t dl_fail "$base")"; return 1; }
+    mirror_ask || { warn "$(t dl_fail "$base")"; return 1; }
     fetch --retry 2 --connect-timeout 15 -o "$out" "${PBOX_MIRROR}${url}" || { warn "$(t dl_fail "$base")"; return 1; }
   fi
   got=$(sha256_of "$out")
@@ -95,6 +117,11 @@ cores_ensure() {
   spin_start "$(t spin_wait)"
   for p in $pids; do wait "$p" || fail=1; done
   spin_stop
+  # 后台下载失败时问不了镜像，这里问一次，填了就按顺序再下一遍
+  if [ "$fail" = 1 ] && [ -z "${PBOX_MIRROR:-}" ] && mirror_ask; then
+    fail=0
+    for core in $todo; do core_fetch "$core" "$tmp" || fail=1; done
+  fi
   if [ "$fail" = 1 ]; then rm -rf "$tmp"; return 1; fi
   mkdir -p "$BINDIR/previous"
   manifest_add dir "$LIBDIR"

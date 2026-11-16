@@ -256,6 +256,58 @@ svc_remove() {
   manifest_del svc "$n"
 }
 
+# 定时重启（可选，默认关闭）：每天在服务器时间的 <时:分> 重启一次内核。
+# 不重启 Argo 隧道：临时隧道每次重启都会换地址，节点跟着失效。
+# 没有 systemd 的系统交给 crond 的每日任务，时间由系统决定（Alpine 默认凌晨两点）
+restart_timer() { # <off|时:分>
+  local f
+  testing && return 0
+  if [ "$INIT" = systemd ]; then
+    if [ "$1" = off ] || [ -z "$1" ]; then
+      systemctl disable --now pbox-restart.timer >/dev/null 2>&1
+      for f in /etc/systemd/system/pbox-restart.service /etc/systemd/system/pbox-restart.timer; do
+        [ -f "$f" ] && rm -f "$f" && manifest_del file "$f"
+      done
+      systemctl daemon-reload
+      return 0
+    fi
+    cat >/etc/systemd/system/pbox-restart.service <<EOF
+[Unit]
+Description=pbox scheduled restart
+
+[Service]
+Type=oneshot
+ExecStart=$LIBDIR/pbox.sh restart
+EOF
+    # 关机错过的那次不补：开机本来就是一次重启
+    cat >/etc/systemd/system/pbox-restart.timer <<EOF
+[Unit]
+Description=pbox scheduled restart
+
+[Timer]
+OnCalendar=*-*-* $1:00
+
+[Install]
+WantedBy=timers.target
+EOF
+    manifest_add file /etc/systemd/system/pbox-restart.service
+    manifest_add file /etc/systemd/system/pbox-restart.timer
+    systemctl daemon-reload
+    systemctl enable --now pbox-restart.timer >/dev/null 2>&1
+  else
+    f=/etc/periodic/daily/pbox-restart
+    if [ "$1" = off ] || [ -z "$1" ]; then
+      [ -f "$f" ] && rm -f "$f" && manifest_del file "$f"
+      return 0
+    fi
+    mkdir -p /etc/periodic/daily
+    printf '#!/bin/sh\nexec %s restart\n' "$LIBDIR/pbox.sh" >"$f"
+    chmod 755 "$f"
+    manifest_add file "$f"
+    rc-service crond status >/dev/null 2>&1 || rc-service crond start >/dev/null 2>&1
+  fi
+}
+
 # 内核只需要读生成的配置和证书；状态、节点链接、备份只有 root 能读。
 fix_perms() {
   testing && return 0

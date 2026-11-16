@@ -75,6 +75,7 @@ cmd_restore() {
   rm -rf "$tmp"
   txn_commit || die "$(t apply_fail)"
   self_install
+  restart_timer "$(gget restart_at off)"
   hop_apply
   fw_sync
   nodes_write

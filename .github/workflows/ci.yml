@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./build.sh
       - name: install, change, rollback, backup, uninstall, restore
-        run: sudo bash tests/vm.sh
+        run: sudo PBOX_VM_UFW=1 bash tests/vm.sh
 
   # 容器里没有服务管理器：只验证下载、哈希、内核对配置的校验
   containers:
