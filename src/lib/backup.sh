@@ -76,6 +76,7 @@ cmd_restore() {
   txn_commit || die "$(t apply_fail)"
   self_install
   restart_timer "$(gget restart_at off)"
+  if debug_on; then debug_timer on; else debug_timer off; fi
   hop_apply
   fw_sync
   nodes_write

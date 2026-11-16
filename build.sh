@@ -46,6 +46,7 @@ src/lib/doctor.sh
 src/lib/fix.sh
 src/lib/backup.sh
 src/lib/update.sh
+src/lib/debug.sh
 src/cmd.sh
 src/menu.sh
 src/main.sh

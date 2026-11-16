@@ -170,6 +170,12 @@ d_resources() {
   return 0
 }
 
+d_debug() {
+  local m
+  if m=$(debug_left); then note "$(t debug_state_on "$m")"; fi
+  return 0
+}
+
 # 只提醒，不改动 SSH 设置。
 d_ssh() {
   has sshd || return 0
@@ -214,6 +220,7 @@ cmd_doctor() {
   done
   spin_stop
   d_resources >>"$out"
+  d_debug >>"$out"
   d_ssh >>"$out"
   d_external >>"$out"
   {
@@ -242,13 +249,15 @@ redact_words() {
 
 # 求助用的报告。体检输出本身不含密钥，但有地址和域名。
 # 长的先换：套 CDN 的子域名包含证书域名，先换短的会留下子域名的前缀。
-# 列表之外的 IPv4（例如对端解析出的地址）也一律隐去，只留本机回环
+# 列表之外的 IP（对端解析出的地址、调试日志里的客户端地址）也一律隐去，只留本机回环。
+# IPv6 至少要有三个冒号才算，免得把日志里的时间当成地址
 doctor_redact() {
   local tag v exprs=()
   while IFS=$'\t' read -r tag v; do
     exprs+=(-e "s/$(printf '%s' "$v" | sed 's/[][\\.^$*+?(){}|/]/\\&/g')/$tag/g")
   done < <(redact_words | awk -F'\t' '$2 != "" && !seen[$2]++ {print length($2) "\t" $0}' | sort -rn | cut -f2-)
   sed -E "${exprs[@]}" -e 's/127\.0\.0\.1/@lo@/g' -e 's/([0-9]{1,3}\.){3}[0-9]{1,3}/<IP>/g' -e 's/@lo@/127.0.0.1/g' \
+    -e 's/([0-9a-fA-F]{0,4}:){3,7}[0-9a-fA-F]{0,4}/<IP>/g' \
     -e 's/\x1b\[[0-9;]*m//g'
   say "pbox $PBOX_VERSION · $(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID") · $(uname -m)"
 }

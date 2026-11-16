@@ -30,8 +30,9 @@ xray_sniffing() {
 }
 
 core_render_base() {
-  local rules extra block doh pref ds dns resolver
+  local rules extra block doh pref ds dns resolver dbg=""
   block=$(gget block_private 1) doh=$(dns_doh_ip) pref=$(ip_strategy "$1")
+  debug_on && dbg=1
   case "$1" in
     xray)
       rules=""
@@ -43,7 +44,7 @@ core_render_base() {
       [ -z "$ds" ] && [ -n "$doh" ] && ds=UseIP
       cat <<EOF
 {
-  "log": {"loglevel": "error", "access": "none"},$([ -n "$doh" ] && printf '\n  "dns": {"servers": ["https://%s/dns-query"]},' "$doh")
+  "log": $(if [ -n "$dbg" ]; then printf '{"loglevel": "debug", "access": ""}'; else printf '{"loglevel": "error", "access": "none"}'; fi),$([ -n "$doh" ] && printf '\n  "dns": {"servers": ["https://%s/dns-query"]},' "$doh")
   "outbounds": [
     {"tag": "direct", "protocol": "freedom"$([ -n "$ds" ] && printf ', "settings": {"domainStrategy": "%s"}' "$ds")},
     {"tag": "block", "protocol": "blackhole"}
@@ -81,7 +82,7 @@ EOF
       [ -n "$pref" ] && resolver=$(printf '{"server": %s, "strategy": "%s"}' "$resolver" "$pref")
       cat <<EOF
 {
-  "log": {"level": "fatal", "timestamp": true},$([ -n "$dns" ] && printf '\n  "dns": %s,' "$dns")
+  "log": {"level": "$([ -n "$dbg" ] && echo debug || echo fatal)", "timestamp": true},$([ -n "$dns" ] && printf '\n  "dns": %s,' "$dns")
   "outbounds": [
     {"type": "direct", "tag": "direct"}
   ],$(warp_endpoint_json)

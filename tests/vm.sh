@@ -83,6 +83,12 @@ else
   check "删除它们" bash -c "$P del tuic --yes && $P del anytls --yes"
   check "添加第二个用户后体检全过" bash -c "$P user add bob --yes && sleep 2 && $P doctor"
   check "删除第二个用户" $P user del bob --yes
+  slog=/var/log/pbox/pbox-singbox.log
+  check "打开调试日志后到期检查的定时器在运行" bash -c "$P debug on 10 --yes && systemctl is-active --quiet pbox-debug.timer"
+  check "定时器调用的检查能正常执行，没到期时不关" bash -c "systemctl start pbox-debug.service && grep -q '^debug_until=.' /etc/pbox/state/global.env"
+  check "调试时节点自测的连接写进了日志" bash -c "$P doctor && grep -qi 'inbound' $slog"
+  check "到期后检查会关掉、清空日志并撤掉定时器" bash -c "PBOX_TEST_NOW=\$((\$(date +%s) + 700)) $P debug check && ! grep -qi 'inbound' $slog && ! [ -e /etc/systemd/system/pbox-debug.timer ] && ! grep -q pbox-debug /etc/pbox/manifest"
+  check "关闭后体检全过" $P doctor
   export PBOX_BACKUP_PASSWORD=vm-test
   check "备份" $P backup /tmp/pbox-vm.bin --yes
   check "卸载" $P uninstall --yes

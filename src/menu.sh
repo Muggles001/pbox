@@ -560,15 +560,27 @@ menu_backup() {
 }
 
 menu_log() {
+  local m
   while :; do
     menu_header "$(t m_log)"
     item 1 ml_view ml_view_d
     item 2 ml_clear ml_clear_d
+    printf "$T_m_fmt" 3 "$(t ml_debug)" "${C_D}[$(if m=$(debug_left); then t ml_debug_left "$m"; else t off; fi)] $(t ml_debug_d)${C_0}"
+    item 4 ml_report ml_report_d
     item 0 m_back m_blank
     choose
     case "$REPLY" in
       1) run cmd_log ;;
       2) run cmd_log clear ;;
+      3)
+        if debug_on; then
+          run cmd_debug off
+        else
+          ask " $(t ml_ask_debug "$DEBUG_MAX")" 30
+          run cmd_debug on "$REPLY"
+        fi
+        ;;
+      4) run cmd_log --report ;;
       *) return 0 ;;
     esac
   done

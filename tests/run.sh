@@ -572,6 +572,7 @@ red() { printf '%s\n' "$1" | doctor_redact; }
 check "长的先换：子域名整体换掉，不留前缀" test "$(red 'cdn.r.example.com r.example.com')" = '<cdn-domain> <domain>'
 check "名单外的 IPv4 也隐去，回环地址保留" test "$(red '连到 198.51.100.7:23123，本机 127.0.0.1')" = '连到 <IP>:23123，本机 127.0.0.1'
 check "域名里的点按字面匹配" test "$(red 'land-example.net land.example.net')" = 'land-example.net <relay>'
+check "IPv6 客户端地址隐去，时间不受影响" test "$(red '12:30:45 from [2408:8207:1e::5]:51234')" = '12:30:45 from [<IP>]:51234'
 unset -f redact_words say red
 
 echo "定时重启"
@@ -584,6 +585,26 @@ check "时间写错时拒绝" bash -c "! bash dist/pbox.sh set restart 24:00 --y
 check "关闭" bash -c "bash dist/pbox.sh set restart off --yes && ! grep -q '^restart_at=.' '$(E)/state/global.env'"
 check "立即重启" bash -c "bash dist/pbox.sh restart | grep -q 已重启"
 check "菜单里可以设置" bash -c "printf '6\nt\n05:15\n\n0\n0\n' | bash dist/pbox.sh >/dev/null 2>&1; grep -qx 'restart_at=05:15' '$(E)/state/global.env'"
+
+echo "调试日志"
+new_root
+PBOX_PROTOCOLS="reality-vision reality-xhttp" pbox install --yes >/dev/null 2>&1
+dbg_level() { grep -h '"log"' "$(E)/generated/sing-box/00_base.json" "$(E)/generated/xray/00_base.json" | tr -d ' \n'; }
+check "默认只记严重错误" test "$(dbg_level)" = '"log":{"level":"fatal","timestamp":true},"log":{"loglevel":"error","access":"none"},'
+check "打开后两个内核都记详细日志" bash -c "bash dist/pbox.sh debug on 20 --yes 2>&1 | grep -q '20 分钟后自动关闭'"
+check "打开后的日志级别" test "$(dbg_level)" = '"log":{"level":"debug","timestamp":true},"log":{"loglevel":"debug","access":""},'
+check "查看状态和体检都提示剩余时间" bash -c "bash dist/pbox.sh debug | grep -q '还剩 20 分钟' && bash dist/pbox.sh doctor 2>&1 | grep -q '调试日志开着'"
+check "没到期时检查不动它" bash -c "bash dist/pbox.sh debug check && grep -q '^debug_until=.' '$(E)/state/global.env'"
+mkdir -p "$PBOX_ROOT/var/log/pbox" && echo 'from 198.51.100.7:5678' >"$PBOX_ROOT/var/log/pbox/pbox-singbox.log" && echo renewed >"$PBOX_ROOT/var/log/pbox/acme.log"
+check "求助用的日志隐去客户端地址" bash -c "bash dist/pbox.sh log --report | grep -q 'from <IP>:5678'"
+check "到期后检查会关掉并清空内核日志，证书日志留着" bash -c "PBOX_TEST_NOW=\$((\$(date +%s) + 1300)) bash dist/pbox.sh debug check | grep -q 已关闭 && ! grep -q '^debug_until=.' '$(E)/state/global.env' && test ! -s '$PBOX_ROOT/var/log/pbox/pbox-singbox.log' && grep -q renewed '$PBOX_ROOT/var/log/pbox/acme.log'"
+check "关闭后恢复原来的级别" test "$(dbg_level)" = '"log":{"level":"fatal","timestamp":true},"log":{"loglevel":"error","access":"none"},'
+check "到期后的任何改动也按平时的级别生成" bash -c "bash dist/pbox.sh debug on 1 --yes >/dev/null 2>&1 && PBOX_TEST_NOW=\$((\$(date +%s) + 120)) bash dist/pbox.sh set block-bt on --yes >/dev/null 2>&1 && grep -q '\"level\": \"fatal\"' '$(E)/generated/sing-box/00_base.json'"
+bash dist/pbox.sh debug off >/dev/null 2>&1
+check "分钟数超出范围时拒绝" bash -c "! bash dist/pbox.sh debug on 0 && ! bash dist/pbox.sh debug on 241 && ! bash dist/pbox.sh debug on abc && ! grep -q '^debug_until=.' '$(E)/state/global.env'"
+check "平时查看日志提示先打开调试" bash -c "bash dist/pbox.sh log | grep -q 'pbox debug on'"
+check "菜单里打开再关闭" bash -c "printf '9\n3\n15\n\n0\n0\n' | bash dist/pbox.sh >/dev/null 2>&1; grep -q '^debug_until=.' '$(E)/state/global.env' && printf '9\n3\n\n0\n0\n' | bash dist/pbox.sh >/dev/null 2>&1; ! grep -q '^debug_until=.' '$(E)/state/global.env'"
+unset -f dbg_level
 
 echo "下载镜像"
 eval "$(sed -n '/^mirror_norm()/,/^}/p' src/cores/core.sh)"

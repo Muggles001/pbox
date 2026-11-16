@@ -277,7 +277,7 @@ Description=pbox scheduled restart
 
 [Service]
 Type=oneshot
-ExecStart=$LIBDIR/pbox.sh restart
+ExecStart=$(exec_prefix)$LIBDIR/pbox.sh restart
 EOF
     # 关机错过的那次不补：开机本来就是一次重启
     cat >/etc/systemd/system/pbox-restart.timer <<EOF

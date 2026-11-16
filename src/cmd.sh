@@ -192,6 +192,7 @@ do_uninstall() {
   # 定时器的启用链接不在清单里，只删文件会留下一个失效的链接
   domain_timer off
   restart_timer off
+  debug_timer off
   sub_leave || warn "$(t sub_leave_fail)"
   if [ -f "$MANIFEST" ]; then
     grep '^svc	' "$MANIFEST" | cut -f2 | while read -r val; do svc_remove "$val"; done
@@ -575,18 +576,26 @@ cmd_rollback() {
 }
 
 cmd_log() {
-  local f
+  local f a n=40 report=""
   need_root
-  if [ "${1:-}" = clear ]; then
-    for f in "$LOGDIR"/*.log; do [ -f "$f" ] && : >"$f"; done
-    say "$(t log_cleared)"
-    return 0
-  fi
+  for a in "$@"; do
+    case "$a" in
+      clear)
+        for f in "$LOGDIR"/*.log; do [ -f "$f" ] && : >"$f"; done
+        say "$(t log_cleared)"
+        return 0
+        ;;
+      --report) report=1 ;;
+      '' | *[!0-9]*) die "$(t log_usage)" ;;
+      *) n=$a ;;
+    esac
+  done
+  [ -n "$report" ] || debug_on || note "$(t log_hint)"
   for f in "$LOGDIR"/*.log; do
     [ -f "$f" ] || continue
     printf '%s== %s ==%s\n' "$C_B" "$(basename "$f")" "$C_0"
-    tail -n 40 "$f"
-  done
+    tail -n "$n" "$f"
+  done | if [ -n "$report" ]; then doctor_redact; else cat; fi
 }
 
 cmd_firewall() {
@@ -647,7 +656,8 @@ pbox $PBOX_VERSION
   pbox bbr [on|off|status]
   pbox domain [status|set DOMAIN [dns]|set ip|off|renew [force]]
   pbox site [status|on|off|source <builtin|https://URL>|cdn <SUBDOMAIN|off>]
-  pbox fix   pbox firewall   pbox rollback   pbox log [clear]
+  pbox fix   pbox firewall   pbox rollback   pbox log [N] [--report|clear]
+  pbox debug [on [MIN]|off]
   pbox backup [FILE]   pbox restore FILE
   pbox update   pbox uninstall   pbox lang
 
