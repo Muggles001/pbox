@@ -54,9 +54,9 @@ vless_xhttp_alpn() { # <握手里的名字>
 proto_vless_xhttp_share_link() {
   local h
   h=$(wstls_name)
-  printf 'vless://%s@%s:%s?encryption=none&security=tls&sni=%s&fp=%s&alpn=%s&type=xhttp&host=%s&path=%s&mode=auto#%s\n' \
+  printf 'vless://%s@%s:%s?encryption=none&security=tls&sni=%s&fp=%s&alpn=%s&type=xhttp&host=%s&path=%s&mode=auto%s#%s\n' \
     "$(uget "$1" uuid)" "$(host_fmt "$2")" "$(pubport vless-xhttp)" "$h" "$(fp_of vless-xhttp)" \
-    "$(vless_xhttp_alpn "$h" | sed 's#/#%2F#g')" "$h" "$(pget vless-xhttp path | sed 's#/#%2F#g')" "$3"
+    "$(vless_xhttp_alpn "$h" | sed 's#/#%2F#g')" "$h" "$(pget vless-xhttp path | sed 's#/#%2F#g')" "$(ech_link_param "$h")" "$3"
 }
 
 proto_vless_xhttp_client_singbox() { :; }
@@ -72,7 +72,7 @@ vless_xhttp_selftest() {
  "outbounds": [{"protocol": "vless",
   "settings": {"address": "$1", "port": 443, "id": "$(uget "$u" uuid)", "encryption": "none"},
   "streamSettings": {"network": "xhttp", "xhttpSettings": {"path": "$(pget vless-xhttp path)", "host": "$2"}, "security": "tls",
-   "tlsSettings": {"serverName": "$2", "fingerprint": "chrome", "alpn": ["$(vless_xhttp_alpn "$2")"]}}}]}
+   "tlsSettings": {"serverName": "$2", "fingerprint": "chrome", "alpn": ["$(vless_xhttp_alpn "$2")"]$(ech_xray_field "$2")}}}]}
 EOF
   selftest xray "$d/c.json" "$p"
   rc=$?

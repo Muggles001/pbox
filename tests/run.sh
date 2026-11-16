@@ -413,6 +413,7 @@ check "没开伪装站时不能设" bash -c "! bash dist/pbox.sh site cdn c.exam
 pbox site on --yes >/dev/null 2>&1
 pbox add vless-wstls --yes >/dev/null 2>&1
 pbox add trojan --yes >/dev/null 2>&1
+check "没设子域名时不能开 ECH" bash -c "! bash dist/pbox.sh site ech on --yes && ! grep -q '^ech=1' '$(E)/state/global.env'"
 check "不能用直连的域名" bash -c "! bash dist/pbox.sh site cdn w.example.com --yes"
 check "没解析也不在 Cloudflare 后面时拒绝" bash -c "! PBOX_TEST_DNS_A= bash dist/pbox.sh site cdn c.example.com --yes && ! grep -q '^cdn_host=c' '$(E)/state/global.env'"
 check "没设子域名时不能设优选" bash -c "! bash dist/pbox.sh change vless-wstls cdn www.visa.com.sg --yes"
@@ -436,6 +437,16 @@ check "自选名单里有不认识的协议时拒绝" bash -c "! bash dist/pbox.
 check "恢复自动挑选" bash -c "bash dist/pbox.sh set compact-nodes auto --yes && [ \$(grep -c . '$(E)/nodes/links.txt') = 3 ]"
 check "精简时主力没有就由下一个顶上" bash -c "bash dist/pbox.sh user add carol trojan,vless-wstls --yes && l='$(E)/nodes/links.txt' && [ \$(grep -c -- '-carol\$' \$l) = 2 ] && grep -q 'Trojan-.*-carol\$' \$l && grep -q 'WS-CDN-Pref-carol\$' \$l && bash dist/pbox.sh user del carol --yes"
 check "关掉精简后恢复" bash -c "bash dist/pbox.sh set compact-nodes off --yes && grep -q 'WS-CDN\$' '$(E)/nodes/links.txt'"
+check "开 ECH 后只有经 CDN 的节点加密握手，不用 uTLS" bash -c "PBOX_TEST_ECH='AEX+t/s=' bash dist/pbox.sh site ech on --yes && python3 -c 'import json,sys
+o={x[\"tag\"]:x for x in json.load(open(sys.argv[1]))[\"outbounds\"]}
+c=[t for t in o if t.endswith(\"WS-CDN\") or t.endswith(\"WS-CDN-Pref\")]
+d=[t for t in o if t.endswith(\"WS-TLS\")]
+ok=len(c)==2 and len(d)==1
+ok=ok and all(o[t][\"tls\"][\"ech\"][\"config\"][1]==\"AEX+t/s=\" and \"utls\" not in o[t][\"tls\"] for t in c)
+ok=ok and \"ech\" not in o[d[0]][\"tls\"] and o[d[0]][\"tls\"][\"utls\"][\"enabled\"]
+sys.exit(not ok)' '$(E)/nodes/sing-box.json' && m='$(E)/nodes/mihomo.yaml' && [ \$(grep -c 'config: AEX+t/s=' \$m) = 2 ] && grep -q 'client-fingerprint' \$m && l='$(E)/nodes/links.txt' && [ \$(grep -c '&ech=c.example.com%2Bhttps%3A%2F%2F1.1.1.1%2Fdns-query#' \$l) = 2 ] && ! grep 'WS-TLS\$' \$l | grep -q 'ech='"
+check "取不到 ECH 配置时让客户端自己查，体检报错" bash -c "PBOX_TEST_ECH= bash dist/pbox.sh site ech on --yes && grep -q '\"ech\": {\"enabled\": true}' '$(E)/nodes/sing-box.json' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null && grep -q 'ech-opts' '$(E)/nodes/mihomo.yaml' && ! grep -q 'config: ' '$(E)/nodes/mihomo.yaml' && PBOX_TEST_ECH= bash dist/pbox.sh doctor 2>&1 | grep -q '取不到 c.example.com 的 ECH'"
+check "关掉 ECH 后恢复原样" bash -c "bash dist/pbox.sh site ech off --yes && ! grep -q '\"ech\"' '$(E)/nodes/sing-box.json' && ! grep -q 'ech-opts' '$(E)/nodes/mihomo.yaml' && ! grep -q 'ech=' '$(E)/nodes/links.txt'"
 check "设着子域名时不能关伪装站" bash -c "bash dist/pbox.sh del trojan --yes && bash dist/pbox.sh del vless-wstls --yes && ! bash dist/pbox.sh site off --yes"
 check "停用后分流和节点里都没有子域名" bash -c "bash dist/pbox.sh add vless-wstls --yes && bash dist/pbox.sh site cdn off --yes && ! grep -q 'c.example.com' '$(E)/generated/nginx/nginx.conf' && ! grep -q 'c.example.com' '$(E)/nodes/links.txt'"
 unset PBOX_TEST_DNS_A
@@ -480,6 +491,7 @@ check "只有通用链接，直连时用 HTTP/2" bash -c "grep -q '^vless://.*@w
 check "前面有 Trojan 时直连节点改用 HTTP/1.1" bash -c "bash dist/pbox.sh add trojan --yes && grep -q 'alpn=http%2F1.1&type=xhttp.*#XHTTP-TLS' '$(E)/nodes/links.txt'"
 check "路径不能和别的协议相同或互相包含" bash -c "bash dist/pbox.sh add vless-wstls --yes && bash dist/pbox.sh change vless-xhttp path /xh --yes && ! bash dist/pbox.sh change vless-wstls path /xh --yes && ! bash dist/pbox.sh change vless-wstls path /xh/ws --yes && bash dist/pbox.sh change vless-wstls path /ws1 --yes && ! bash dist/pbox.sh change vless-xhttp path /ws1 --yes"
 check "经 CDN 的节点用 HTTP/2，沿用已设的优选地址" bash -c "bash dist/pbox.sh del vless-xhttp --yes && bash dist/pbox.sh site cdn c.example.com --yes && bash dist/pbox.sh change vless-wstls cdn www.visa.com.sg --yes && bash dist/pbox.sh add vless-xhttp --yes && grep -q '@www.visa.com.sg:443?.*sni=c.example.com.*alpn=h2&type=xhttp&host=c.example.com.*#XHTTP-CDN-Pref' '$(E)/nodes/links.txt' && [ \$(grep -c '#XHTTP-' '$(E)/nodes/links.txt') = 3 ]"
+check "开 ECH 后经 CDN 的 XHTTP 链接带 DoH 查询" bash -c "PBOX_TEST_ECH=AEX bash dist/pbox.sh site ech on --yes && l='$(E)/nodes/links.txt' && grep -q 'mode=auto&ech=c.example.com%2Bhttps%3A%2F%2F1.1.1.1%2Fdns-query#XHTTP-CDN-Pref' \$l && ! grep '#XHTTP-TLS' \$l | grep -q 'ech='"
 unset PBOX_TEST_DNS_A
 
 echo "Shadowsocks 2022、ShadowTLS、Reality-XHTTP"

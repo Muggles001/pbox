@@ -290,6 +290,7 @@ menu_domain() {
     printf "$T_m_fmt" 6 "$(t md_site)" "${C_D}[$(onoff "$(site_on_p && echo 1 || echo 0)")] $(t md_site_d)${C_0}"
     printf "$T_m_fmt" 7 "$(t md_source)" "${C_D}[$(site_source)] $(t md_source_d)${C_0}"
     printf "$T_m_fmt" 8 "$(t md_cdn)" "${C_D}[$(gget cdn_host "$(t off)")] $(t md_cdn_d)${C_0}"
+    [ -n "$(gget cdn_host)" ] && printf "$T_m_fmt" 9 "ECH" "${C_D}[$(onoff "$(gget ech 0)")] $(t md_ech_d)${C_0}"
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -316,6 +317,14 @@ menu_domain() {
           say " $(t cdn_intro_host)"
           ask " $(t cdn_ask_host)" ""
           [ -n "$REPLY" ] && run cmd_site cdn "$REPLY"
+        fi
+        ;;
+      9)
+        if [ "$(gget ech 0)" = 1 ]; then
+          run cmd_site ech off
+        elif [ -n "$(gget cdn_host)" ]; then
+          say " $(t ech_intro)"
+          confirm " $(t ech_on_q)" && run cmd_site ech on
         fi
         ;;
       *) return 0 ;;

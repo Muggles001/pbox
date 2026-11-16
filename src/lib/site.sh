@@ -339,6 +339,7 @@ site_status() {
   if site_on_p; then
     say "$(t site_status_on "$(gget tls_domain)" "$(site_source)")"
     [ -n "$(gget cdn_host)" ] && say "$(t cdn_status "$(gget cdn_host)")"
+    ech_on && say "ECH: $(t on)"
   else
     say "$(t site_not_on)"
   fi
@@ -450,13 +451,14 @@ d_cdn() {
   esac
 }
 
-# pbox site [status|on|off|source <builtin|https://网址>|cdn <子域名|off>]
+# pbox site [status|on|off|source <builtin|https://网址>|cdn <子域名|off>|ech [on|off]]
 cmd_site() {
   case "${1:-status}" in
     on) site_enable ;;
     off) site_disable ;;
     source) site_set_source "${2:-}" ;;
     cdn) if [ "${2:-}" = off ]; then site_cdn_off; else site_cdn_set "${2:-}"; fi ;;
+    ech) cmd_ech "${2:-}" ;;
     status) need_root; need_installed; site_status ;;
     *) cmd_help ;;
   esac

@@ -103,8 +103,8 @@ proto_vless_wstls_hosts() { wstls_hosts vless-wstls; }
 proto_vless_wstls_share_link() {
   local p h
   p=$(pget vless-wstls path | sed 's#/#%2F#g') h=$(wstls_name)
-  printf 'vless://%s@%s:%s?encryption=none&security=tls&sni=%s&fp=%s&alpn=http%%2F1.1&type=ws&host=%s&path=%s#%s\n' \
-    "$(uget "$1" uuid)" "$(host_fmt "$2")" "$(pubport vless-wstls)" "$h" "$(fp_of vless-wstls)" "$h" "$p" "$3"
+  printf 'vless://%s@%s:%s?encryption=none&security=tls&sni=%s&fp=%s&alpn=http%%2F1.1&type=ws&host=%s&path=%s%s#%s\n' \
+    "$(uget "$1" uuid)" "$(host_fmt "$2")" "$(pubport vless-wstls)" "$h" "$(fp_of vless-wstls)" "$h" "$p" "$(ech_link_param "$h")" "$3"
 }
 
 proto_vless_wstls_client_singbox() {
@@ -117,7 +117,7 @@ proto_vless_wstls_client_singbox() {
       "server": "$2",
       "server_port": $(pubport vless-wstls),
       "uuid": "$(uget "$1" uuid)",
-      "tls": {"enabled": true, "server_name": "$h", "alpn": ["http/1.1"], "utls": {"enabled": true, "fingerprint": "$(fp_of vless-wstls)"}},
+      "tls": $(ech_sb_tls "$h" http/1.1 "$(fp_of vless-wstls)"),
       "transport": {"type": "ws", "path": "$(pget vless-wstls path)", "headers": {"Host": "$h"}}
     }
 EOF
@@ -137,7 +137,7 @@ proto_vless_wstls_client_mihomo() {
     tls: true
     servername: "$h"
     alpn: ["http/1.1"]
-    client-fingerprint: $(fp_of vless-wstls)
+$(ech_mh_lines "$h" "$(fp_of vless-wstls)")
     ws-opts:
       path: "$(pget vless-wstls path)"
       headers:

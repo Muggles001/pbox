@@ -157,6 +157,7 @@ nodes_build() {
 # 顶层是全部用户的节点；users/<名字>/ 下是每个人各自的一份，订阅按人生成
 nodes_write() {
   local u
+  ech_load
   NODE_USER=""
   nodes_build "$NODES"
   rm -rf "$NODES/users"

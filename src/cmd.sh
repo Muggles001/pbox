@@ -656,7 +656,7 @@ pbox $PBOX_VERSION
   pbox relay [status|invite|forward CODE [NAME]|forward off NAME|via CODE [NAME]|via off NAME]
   pbox bbr [on|off|status]
   pbox domain [status|set DOMAIN [dns]|set ip|off|renew [force]]
-  pbox site [status|on|off|source <builtin|https://URL>|cdn <SUBDOMAIN|off>]
+  pbox site [status|on|off|source <builtin|https://URL>|cdn <SUBDOMAIN|off>|ech [on|off]]
   pbox fix   pbox firewall   pbox rollback   pbox log [N] [--report|clear]
   pbox debug [on [MIN]|off]
   pbox backup [FILE]   pbox restore FILE

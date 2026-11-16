@@ -42,7 +42,7 @@ bash pbox.sh install
 | 域名证书 | 有域名时一步申请受信任的证书并自动续期，Hysteria2、TUIC、AnyTLS 不再需要指纹或跳过验证 |
 | 伪装站 | 浏览器访问你的域名时看到正常网页，与 Reality 共用 443，不动机器上原有的网站配置 |
 | Trojan、VLESS-WS-TLS、VMess-WS-TLS、VLESS-XHTTP-TLS | 开了伪装站后可选。XHTTP 把上传下载拆成普通网页请求；和网站共用域名与 443：Trojan 密码不对时显示网页，WS 是网站上的一个隐蔽路径；VMess 给不支持 VLESS 的老客户端 |
-| 套 CDN | 用一个打开了 Cloudflare 代理的子域名，WS 节点经 CDN 连接，可配优选地址 |
+| 套 CDN | 用一个打开了 Cloudflare 代理的子域名，WS 节点经 CDN 连接，可配优选地址；可选 ECH，握手里不露出子域名 |
 | 订阅 | 用自己的域名或 IP 证书直接提供本机的订阅，每人一条随机路径；要把多台机器按用户名合并成一个订阅地址，推送到你自己的 GitLab 私有仓库。覆盖 v2rayN/NG、Clash 系、sing-box 等客户端 |
 | WARP 出口 | 目标网站不欢迎机房 IP 时使用，可按网站分流 |
 | 访问限制 | 默认屏蔽访问内网；可选屏蔽 BT 下载、屏蔽回国流量、节点解析改走加密 DNS |
