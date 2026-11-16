@@ -244,11 +244,11 @@ redact_words() {
 # 长的先换：套 CDN 的子域名包含证书域名，先换短的会留下子域名的前缀。
 # 列表之外的 IPv4（例如对端解析出的地址）也一律隐去，只留本机回环
 doctor_redact() {
-  local tag v args=()
+  local tag v exprs=()
   while IFS=$'\t' read -r tag v; do
-    args+=(-e "s/$(printf '%s' "$v" | sed 's/[][\\.^$*+?(){}|/]/\\&/g')/$tag/g")
+    exprs+=(-e "s/$(printf '%s' "$v" | sed 's/[][\\.^$*+?(){}|/]/\\&/g')/$tag/g")
   done < <(redact_words | awk -F'\t' '$2 != "" && !seen[$2]++ {print length($2) "\t" $0}' | sort -rn | cut -f2-)
-  sed -E "${args[@]}" -e 's/127\.0\.0\.1/@lo@/g' -e 's/([0-9]{1,3}\.){3}[0-9]{1,3}/<IP>/g' -e 's/@lo@/127.0.0.1/g' \
+  sed -E "${exprs[@]}" -e 's/127\.0\.0\.1/@lo@/g' -e 's/([0-9]{1,3}\.){3}[0-9]{1,3}/<IP>/g' -e 's/@lo@/127.0.0.1/g' \
     -e 's/\x1b\[[0-9;]*m//g'
   say "pbox $PBOX_VERSION · $(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID") · $(uname -m)"
 }
