@@ -36,12 +36,12 @@ proto_socks_meta() {
     # UDP 转发时 sing-box 另开一个临时端口，没法固定，所以只放行 TCP。
     # 开着系统防火墙或在 NAT 机器上，UDP 转发不通
     l4) echo tcp ;;
-    note) echo note_socks_plain ;;
+    risk) echo s2_warn ;;
   esac
 }
 
 proto_socks_plan() {
-  local p
+  local p a
   p=$(opt SOCKS_PORT)
   if [ -n "$p" ]; then
     valid_port "$p" || die "$(t bad_port "$p")"
@@ -49,6 +49,25 @@ proto_socks_plan() {
     p=$(random_port tcp) || return 1
   fi
   pset socks port "$p"
+  a=$(opt SOCKS_ALLOW | tr -d ' ')
+  if [ -n "$a" ]; then
+    socks_allow_ok "$a" || die "$(t bad_allow "$a")"
+    pset socks allow "$a"
+  fi
+}
+
+# 问一次允许的来源，结果在 REPLY，空表示不限制
+socks_allow_ask() {
+  ask "  $(t socks_allow_q)" ""
+  REPLY=$(printf '%s' "$REPLY" | tr -d ' ')
+  [ -z "$REPLY" ] || socks_allow_ok "$REPLY" || { txn_abort; die "$(t bad_allow "$REPLY")"; }
+}
+
+# 启用时的补救：限定了来源，别人即使看到明文密码也连不上
+proto_socks_mitigate() {
+  socks_allow_ask
+  [ -n "$REPLY" ] || return 1
+  pset socks allow "$REPLY"
 }
 
 proto_socks_secrets() { :; }

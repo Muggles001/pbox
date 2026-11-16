@@ -236,6 +236,8 @@ check "链接里是外网端口" grep -q '@203.0.113.10:31001?' "$(E)/nodes/link
 check "内核监听的仍是内网端口" grep -q '"listen_port": 443' "$(E)/generated/sing-box/10_reality-vision.json"
 check "没给外网端口的 Hysteria2 没有安装" test ! -e "$(E)/state/protocols/hysteria2.env"
 check "事后可以修改外网端口" bash -c "bash dist/pbox.sh change reality-vision ext-port 31002 --yes && grep -q ':31002?' '$(E)/nodes/links.txt'"
+check "两个 TCP 协议不能写同一个外网端口" bash -c "bash dist/pbox.sh add anytls --yes && ! bash dist/pbox.sh change anytls ext-port 31002 --yes && ! grep -q ext_port '$(E)/state/protocols/anytls.env'"
+check "TCP 和 UDP 可以用同一个外网端口号" bash -c "bash dist/pbox.sh add hysteria2 --yes && bash dist/pbox.sh change hysteria2 ext-port 31002 --yes"
 unset PBOX_TEST_NAT PBOX_REALITY_EXT_PORT
 
 echo "每个用户的协议名单"
@@ -546,6 +548,23 @@ check "改回不限后规则去掉" bash -c "bash dist/pbox.sh change socks allo
 check "停用 SOCKS5 后规则跟着去掉" bash -c "bash dist/pbox.sh change socks allow 1.2.3.4 --yes && bash dist/pbox.sh del socks --yes && ! grep -q source_ip_cidr '$(E)/generated/sing-box/00_base.json' && bash dist/pbox.sh add socks --yes"
 socks_before=$(grep '^socks://.*-default$' "$(E)/nodes/links.txt")
 check "重置用户后 SOCKS5 的密码跟着变" bash -c "bash dist/pbox.sh user reset default --yes && [ \"\$(grep '^socks://.*-default\$' '$(E)/nodes/links.txt')\" != '$socks_before' ]"
+
+echo "启用前的风险确认"
+new_root
+pbox install --yes >/dev/null 2>&1
+check "推荐配置的安装计划里没有风险提醒" bash -c "R=\$(mktemp -d); PBOX_ROOT=\$R bash dist/pbox.sh install --yes 2>&1 | grep -E '个端口|全随机' >/dev/null; [ \$? = 1 ]"
+check "Shadowsocks 不确认就不启用" bash -c "printf '\n' | bash dist/pbox.sh add ss2022 2>&1 | grep '全随机字节' >/dev/null; test ! -e '$(E)/state/protocols/ss2022.env'"
+check "输入 y 才启用" bash -c "printf 'y\n' | bash dist/pbox.sh add ss2022 >/dev/null 2>&1; test -e '$(E)/state/protocols/ss2022.env'"
+check "SOCKS5 填了来源就不必再确认" bash -c "printf '198.51.100.7\n' | bash dist/pbox.sh add socks >/dev/null 2>&1; grep -qx 'allow=198.51.100.7' '$(E)/state/protocols/socks.env'"
+check "不填来源又不确认就不启用" bash -c "bash dist/pbox.sh del socks --yes && printf '\n\n' | bash dist/pbox.sh add socks >/dev/null 2>&1; test ! -e '$(E)/state/protocols/socks.env'"
+check "不填来源、确认后启用，来源不限" bash -c "printf '\ny\n' | bash dist/pbox.sh add socks >/dev/null 2>&1; test -e '$(E)/state/protocols/socks.env' && ! grep -q '^allow=' '$(E)/state/protocols/socks.env'"
+check "来源写错时不启用" bash -c "bash dist/pbox.sh del socks --yes && printf 'abc\n' | bash dist/pbox.sh add socks >/dev/null 2>&1; test ! -e '$(E)/state/protocols/socks.env'"
+check "--yes 不拦，装好后提醒" bash -c "bash dist/pbox.sh add socks --yes 2>&1 | grep '不加密' >/dev/null && test -e '$(E)/state/protocols/socks.env'"
+check "对外端口到 6 个时要确认" bash -c "printf '\n' | bash dist/pbox.sh add tuic 2>&1 | grep '6 个端口' >/dev/null; test ! -e '$(E)/state/protocols/tuic.env'"
+check "已经超过之后不再提醒" bash -c "bash dist/pbox.sh add tuic --yes >/dev/null && printf '\n' | bash dist/pbox.sh add anytls >/dev/null 2>&1; test -e '$(E)/state/protocols/anytls.env'"
+check "只听本机的协议不算对外端口" bash -c "R=\$(mktemp -d); export PBOX_ROOT=\$R; PBOX_PROTOCOLS='reality-vision hysteria2 tuic anytls reality-grpc' bash dist/pbox.sh install --yes >/dev/null 2>&1 && printf '\n' | bash dist/pbox.sh add vless-ws >/dev/null 2>&1; test -e \$R/etc/pbox/state/protocols/vless-ws.env"
+check "安装计划里列出风险与端口数，来源可由应答传入" bash -c "R=\$(mktemp -d); PBOX_ROOT=\$R PBOX_PROTOCOLS='reality-vision hysteria2 tuic anytls ss2022 socks' PBOX_SOCKS_ALLOW='198.51.100.7, 2001:db8::/32' bash dist/pbox.sh install --yes >\$R/out.txt 2>&1 && grep -q '全随机字节' \$R/out.txt && grep -q '7 个端口' \$R/out.txt && grep -qx 'allow=198.51.100.7,2001:db8::/32' \$R/etc/pbox/state/protocols/socks.env"
+check "自选安装时 SOCKS5 顺带问来源" bash -c "R=\$(mktemp -d); { printf 'c\n\n\n\n\n'; printf '\n\n\n\n\n\n\n'; printf 'y\n\n198.51.100.9\n'; yes ''; } | head -60 | PBOX_ROOT=\$R bash dist/pbox.sh install >/dev/null 2>&1; grep -qx 'allow=198.51.100.9' \$R/etc/pbox/state/protocols/socks.env && test ! -e \$R/etc/pbox/state/protocols/ss2022.env"
 
 echo "链式中转"
 new_root

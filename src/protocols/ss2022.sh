@@ -26,7 +26,7 @@ proto_ss2022_meta() {
     l4) echo tcp ;;
     # 同一个端口上 TCP 和 UDP 都用
     udp_too) echo 1 ;;
-    note) echo note_ss_relay ;;
+    risk) echo s1_warn ;;
   esac
 }
 

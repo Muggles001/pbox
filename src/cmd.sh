@@ -73,6 +73,7 @@ nat_setup() {
     pset "$id" ext_port "$e"
   done
   [ -n "$(protos_enabled)" ] || { txn_abort; die "$(t nat_none)"; }
+  conflict_ext_ports
 }
 
 install_abort() {
@@ -105,6 +106,10 @@ install_customize() {
     if [ -n "$REPLY" ]; then
       valid_port "$REPLY" || die "$(t bad_port "$REPLY")"
       export "$k=$REPLY"
+    fi
+    if [ "$id" = socks ]; then
+      socks_allow_ask
+      export PBOX_SOCKS_ALLOW="$REPLY"
     fi
   done
   [ -n "$picked" ] || die "$(t cancelled)"
@@ -150,6 +155,8 @@ cmd_install() {
   done
   conflict_check
   nat_setup
+  conflict_soft collect
+  PLAN_NOTES="$PLAN_NOTES$SOFT_NOTES"
   show_plan
   if [ "$DRY_RUN" = 1 ]; then txn_abort; return 0; fi
   confirm "$(t plan_go)" || { txn_abort; return 0; }
@@ -242,7 +249,7 @@ edit_end() { # [same]：本次改动不影响本机节点，不提示链接变�
 }
 
 cmd_add() {
-  local id="${1:-}" p="${2:-}"
+  local id="${1:-}" p="${2:-}" notes
   proto_known "$id" || die "$(t c_unknown "$id") ($PROTO_ALL)"
   edit_begin
   proto_enabled "$id" && { txn_abort; die "$(t add_exists "$id")"; }
@@ -255,11 +262,15 @@ cmd_add() {
     pset "$id" port "$p"
   fi
   conflict_check
+  conflict_soft
+  notes="$SOFT_NOTES"
   cores_ensure || { txn_abort; die "$(t dl_abort)"; }
   pcall "$id" secrets
   edit_end
-  [ "$(pmeta "$id" link_insecure)" = 1 ] && [ "$DRY_RUN" != 1 ] && ! tls_real && note "$(t note_link_insecure "$(pmeta "$id" title)")"
-  [ -n "$(pmeta "$id" note)" ] && [ "$DRY_RUN" != 1 ] && note "$(t "$(pmeta "$id" note)")"
+  [ "$DRY_RUN" = 1 ] && return 0
+  [ "$(pmeta "$id" link_insecure)" = 1 ] && ! tls_real && note "$(t note_link_insecure "$(pmeta "$id" title)")"
+  [ -n "$(pmeta "$id" note)" ] && note "$(t "$(pmeta "$id" note)")"
+  [ -n "$notes" ] && printf '%s' "$notes" | while IFS= read -r p; do note "$p"; done
   return 0
 }
 
