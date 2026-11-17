@@ -61,7 +61,7 @@ proto_vmess_client_singbox() {
       "uuid": "$(uget "$1" uuid)",
       "security": "auto",
       "alter_id": 0,
-      "tls": $(ech_sb_tls "$h" http/1.1 "$(fp_of vmess)"),
+      "tls": {"enabled": true, "server_name": "$h", "alpn": ["http/1.1"], "utls": {"enabled": true, "fingerprint": "$(fp_of vmess)"}},
       "transport": {"type": "ws", "path": "$(pget vmess path)", "headers": {"Host": "$h"}}
     }
 EOF
@@ -83,7 +83,7 @@ proto_vmess_client_mihomo() {
     tls: true
     servername: "$h"
     alpn: ["http/1.1"]
-$(ech_mh_lines "$h" "$(fp_of vmess)")
+    client-fingerprint: $(fp_of vmess)
     ws-opts:
       path: "$(pget vmess path)"
       headers:

@@ -35,6 +35,10 @@ compact_pick() { # <用户>
         break
       done
     done
+    # 开了 ECH 时 Clash 只有 XHTTP 能加密握手，所以它也列上
+    if ech_on && proto_enabled vless-xhttp && user_has "$1" vless-xhttp; then
+      case " $rec " in *" vless-xhttp "*) ;; *) rec="$rec vless-xhttp" ;; esac
+    fi
   fi
   printf '%s' "${rec# }"
 }
@@ -99,15 +103,16 @@ node_each() {
 # 有的协议只有通用链接（no_link 相反：只在 Clash 和 sing-box 配置里），节点名单跟着配置走
 _node_link() { [ "$(pmeta "$1" no_link)" = 1 ] || pcall "$1" share_link "$2" "$3" "$4"; }
 _node_link_insecure() { [ "$(pmeta "$1" no_link)" = 1 ] || pcall "$1" share_link "$2" "$3" "$4" insecure; }
-_node_sb() { [ "$(pmeta "$1" link_only)" = 1 ] && return 0; pcall "$1" client_singbox "$2" "$3" "$4"; echo "@@"; }
+_node_sb() { [ "$(pmeta "$1" link_only)" = 1 ] || [ "$(pmeta "$1" no_singbox)" = 1 ] && return 0; pcall "$1" client_singbox "$2" "$3" "$4"; echo "@@"; }
 _node_mh() { [ "$(pmeta "$1" link_only)" = 1 ] || pcall "$1" client_mihomo "$2" "$3" "$4"; }
 _node_name() { [ "$(pmeta "$1" link_only)" = 1 ] || echo "$4"; }
 
 # 把节点片段包成完整的客户端配置。片段与外壳分开，是因为订阅要把几台机器的片段合到一起。
 # 出站片段里每个节点后面跟一行 @@，这里换成 JSON 数组元素之间的逗号。
+# 节点名单两种配置共用，有的协议只在其中一种里（XHTTP 没有 sing-box），所以只列片段里有的
 wrap_singbox() { # <节点名文件> <出站片段文件>
   local tags="" n
-  while IFS= read -r n; do [ -n "$n" ] && tags="$tags\"$n\", "; done <"$1"
+  while IFS= read -r n; do [ -n "$n" ] && grep -qF "\"tag\": \"$n\"," "$2" && tags="$tags\"$n\", "; done <"$1"
   tags="${tags%, }"
   cat <<EOF
 {
@@ -137,7 +142,7 @@ wrap_mihomo() { # <节点名文件> <代理片段文件>
   echo "  - name: proxy"
   echo "    type: select"
   echo "    proxies:"
-  while IFS= read -r n; do [ -n "$n" ] && echo "      - \"$n\""; done <"$1"
+  while IFS= read -r n; do [ -n "$n" ] && grep -qxF "  - name: \"$n\"" "$2" && echo "      - \"$n\""; done <"$1"
   echo "rules:"
   echo "  - MATCH,proxy"
 }
@@ -158,7 +163,6 @@ nodes_build() {
 # 顶层是全部用户的节点；users/<名字>/ 下是每个人各自的一份，订阅按人生成
 nodes_write() {
   local u
-  ech_load
   NODE_USER=""
   nodes_build "$NODES"
   rm -rf "$NODES/users"
@@ -193,7 +197,8 @@ nodes_show() {
   fi
   [ "$(gget compact_nodes 0)" = 1 ] && say "  ${C_D}$(t nodes_compact_on)${C_0}"
   proto_enabled shadowtls && say "  ${C_D}$(t note_stls_nolink)${C_0}"
-  { proto_enabled reality-xhttp || proto_enabled vless-xhttp; } && say "  ${C_D}$(t note_xhttp_clients)${C_0}"
+  proto_enabled reality-xhttp && say "  ${C_D}$(t note_xhttp_clients)${C_0}"
+  proto_enabled vless-xhttp && say "  ${C_D}$(t note_vless_xhttp_clients)${C_0}"
   say "  $(t nodes_qr)        pbox qr"
   say "  $(t nodes_files)   ${NODES#"$R"}/"
   proto_enabled hysteria2 && ! tls_real && say "  ${C_D}$(t nodes_pin_hint)${C_0}"

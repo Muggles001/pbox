@@ -1,6 +1,6 @@
 # VLESS-XHTTP-TLS：伪装站上的又一个隐蔽路径，传输是 XHTTP：上传和下载拆成普通的网页请求，
 # 比 WebSocket 更像正常浏览，也能套 CDN。需要先开伪装站。
-# XHTTP 只有 Xray 实现，所以由 Xray 承载，也只有通用链接（给 v2rayN、v2rayNG 这类客户端）。
+# 服务端由 Xray 承载。客户端有通用链接（v2rayN、v2rayNG）和 Clash（Mihomo v1.19.22 起支持）；sing-box 没有 XHTTP。
 proto_vless_xhttp_meta() {
   case "$1" in
     title) echo "VLESS-XHTTP-TLS" ;;
@@ -9,8 +9,8 @@ proto_vless_xhttp_meta() {
     l4) echo tcp ;;
     local) echo 1 ;;
     behind) echo site ;;
-    link_only) echo 1 ;;
-    note) echo note_xhttp_clients ;;
+    no_singbox) echo 1 ;;
+    note) echo note_vless_xhttp_clients ;;
   esac
 }
 
@@ -59,8 +59,27 @@ proto_vless_xhttp_share_link() {
     "$(vless_xhttp_alpn "$h" | sed 's#/#%2F#g')" "$h" "$(pget vless-xhttp path | sed 's#/#%2F#g')" "$(ech_link_param "$h")" "$3"
 }
 
-proto_vless_xhttp_client_singbox() { :; }
-proto_vless_xhttp_client_mihomo() { :; }
+proto_vless_xhttp_client_mihomo() {
+  local h
+  h=$(wstls_name)
+  cat <<EOF
+  - name: "$3"
+    type: vless
+    server: "$2"
+    port: $(pubport vless-xhttp)
+    uuid: "$(uget "$1" uuid)"
+    network: xhttp
+    udp: true
+    tls: true
+    servername: "$h"
+    alpn: ["$(vless_xhttp_alpn "$h")"]
+    client-fingerprint: $(fp_of vless-xhttp)$(ech_mh_opts "$h")
+    xhttp-opts:
+      path: "$(pget vless-xhttp path)"
+      host: "$h"
+      mode: auto
+EOF
+}
 
 # 只能用 Xray 自己当客户端。<客户端连接的地址> <握手里的名字>
 vless_xhttp_selftest() {

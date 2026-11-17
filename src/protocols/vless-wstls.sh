@@ -117,7 +117,7 @@ proto_vless_wstls_client_singbox() {
       "server": "$2",
       "server_port": $(pubport vless-wstls),
       "uuid": "$(uget "$1" uuid)",
-      "tls": $(ech_sb_tls "$h" http/1.1 "$(fp_of vless-wstls)"),
+      "tls": {"enabled": true, "server_name": "$h", "alpn": ["http/1.1"], "utls": {"enabled": true, "fingerprint": "$(fp_of vless-wstls)"}},
       "transport": {"type": "ws", "path": "$(pget vless-wstls path)", "headers": {"Host": "$h"}}
     }
 EOF
@@ -137,7 +137,7 @@ proto_vless_wstls_client_mihomo() {
     tls: true
     servername: "$h"
     alpn: ["http/1.1"]
-$(ech_mh_lines "$h" "$(fp_of vless-wstls)")
+    client-fingerprint: $(fp_of vless-wstls)
     ws-opts:
       path: "$(pget vless-wstls path)"
       headers:

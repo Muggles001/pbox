@@ -2,13 +2,17 @@
 # 只作用于握手名字是套 CDN 子域名的节点；直连自己机器的节点没有可以藏身的公共名字，开了也没用。
 # 服务端不用改：Cloudflare 免费版默认开着 ECH，加密配置在子域名的 HTTPS 记录里。
 #
-# Cloudflare 大约每一两个小时换一次密钥，客户端取得加密配置的方式按各自能否重试来定：
-# - sing-box：生成配置时写入当前的。过期后按服务器给的新配置重试，但开着 uTLS 时不会，所以这些节点不用 uTLS 指纹
-# - Mihomo、Xray（通用链接）：拿着过期配置不会重试，只能连接时自己查，用 DoH 查。
-#   客户端在国内时 1.1.1.1 常常连不上，所以客户端用国内的 DoH：Mihomo 同时问几家、取先回来的，
-#   Xray 只能写一个。子域名本来就要经系统 DNS 解析地址，交给国内的 DoH 查不多泄露什么
+# 握手里明文的那一层也要像浏览器：国内实测公开层只报 http/1.1 的 ECH 握手会被阻断，
+# 之后几分钟连这个 IP 的连接都会失败；报 h2、http/1.1 的（Chrome、Xray）能通。所以只给这几种开：
+# - 通用链接（Xray）：WebSocket 和 XHTTP 都行，Xray 只把真实的 ALPN 放在加密层
+# - Mihomo：只给 XHTTP。它的 WebSocket 把 http/1.1 原样写到公开层，改不了
+# - sing-box：不开。它的 WebSocket 同样只报 http/1.1，又没有 XHTTP
+#
+# Cloudflare 大约每一两个小时换一次密钥，Mihomo 和 Xray 拿着过期配置都不会重试，所以不写死配置，
+# 由客户端连接时用 DoH 查。客户端在国内时 1.1.1.1 常常连不上，所以用国内的 DoH：
+# Mihomo 同时问几家、取先回来的，Xray 只能写一个。子域名本来就要经系统 DNS 解析地址，交给国内的 DoH 查不多泄露什么
 
-# 服务器在境外，取配置用 Cloudflare 自己的
+# 服务器在境外，体检时取配置用 Cloudflare 自己的
 ECH_DOH="https://1.1.1.1/dns-query"
 ECH_DOH_XRAY="https://223.5.5.5/dns-query"
 ECH_DOH_MIHOMO="[https://223.5.5.5/dns-query, https://1.12.12.12/dns-query, https://1.1.1.1/dns-query]"
@@ -30,40 +34,9 @@ ech_fetch() { # <域名>
   } | grep -o 'ech=[A-Za-z0-9+/=]*' | head -1 | cut -d= -f2-
 }
 
-# 生成节点前取一次，所有用户、所有节点共用，免得每个节点都查一遍
-ech_load() {
-  ECH_CFG=""
-  ech_on && ECH_CFG=$(ech_fetch "$(gget cdn_host)")
-  ECH_LOADED=1
-}
-
-ech_cfg() {
-  [ -n "${ECH_LOADED:-}" ] || ech_load
-  printf '%s' "$ECH_CFG"
-}
-
-# sing-box 的 tls 段。<名字> <alpn> <指纹>
-ech_sb_tls() {
-  local c
-  if ech_for "$1"; then
-    c=$(ech_cfg)
-    if [ -n "$c" ]; then
-      printf '{"enabled": true, "server_name": "%s", "alpn": ["%s"], "ech": {"enabled": true, "config": ["-----BEGIN ECH CONFIGS-----", "%s", "-----END ECH CONFIGS-----"]}}' "$1" "$2" "$c"
-    else
-      printf '{"enabled": true, "server_name": "%s", "alpn": ["%s"], "ech": {"enabled": true}}' "$1" "$2"
-    fi
-  else
-    printf '{"enabled": true, "server_name": "%s", "alpn": ["%s"], "utls": {"enabled": true, "fingerprint": "%s"}}' "$1" "$2" "$3"
-  fi
-}
-
-# Mihomo 里替代 client-fingerprint 的那几行。<名字> <指纹>
-ech_mh_lines() {
-  if ech_for "$1"; then
-    printf '    ech-opts:\n      enable: true\n'
-  else
-    printf '    client-fingerprint: %s\n' "$2"
-  fi
+# Mihomo 节点的 ECH 那几行，接在上一行末尾，只给 XHTTP 用。<名字>
+ech_mh_opts() {
+  ech_for "$1" && printf '\n    ech-opts:\n      enable: true'
   return 0
 }
 
@@ -111,7 +84,7 @@ cmd_ech() {
       gset ech 1
       edit_end
       [ "$DRY_RUN" = 1 ] && return 0
-      [ -n "$(ech_cfg)" ] || warn "$(t d_ech_bad "$(gget cdn_host)") $(t ech_cf_hint)"
+      [ -n "$(ech_fetch "$(gget cdn_host)")" ] || warn "$(t d_ech_bad "$(gget cdn_host)") $(t ech_cf_hint)"
       note "$(t ech_clients)"
       ;;
     off)
