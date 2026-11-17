@@ -2,10 +2,9 @@
 # 只作用于握手名字是套 CDN 子域名的节点；直连自己机器的节点没有可以藏身的公共名字，开了也没用。
 # 服务端不用改：Cloudflare 免费版默认开着 ECH，加密配置在子域名的 HTTPS 记录里。
 #
-# 客户端取得加密配置的方式各不相同：
-# - sing-box、Mihomo：生成配置时写入当前的。Cloudflare 会换密钥，配置过期后客户端按服务器给的新配置重试，
-#   但 sing-box 开着 uTLS 时不会重试，所以这些节点不用 uTLS 指纹
-# - Xray（通用链接）：写入过期配置时不会重试，只能让它连接时自己查，用 DoH 查，
+# Cloudflare 大约每一两个小时换一次密钥，客户端取得加密配置的方式按各自能否重试来定：
+# - sing-box：生成配置时写入当前的。过期后按服务器给的新配置重试，但开着 uTLS 时不会，所以这些节点不用 uTLS 指纹
+# - Mihomo、Xray（通用链接）：拿着过期配置不会重试，只能连接时自己查，用 DoH 查，
 #   因为国内的普通 DNS 查不到 HTTPS 记录
 
 ECH_DOH="https://1.1.1.1/dns-query"
@@ -56,15 +55,22 @@ ech_sb_tls() {
 
 # Mihomo 里替代 client-fingerprint 的那几行。<名字> <指纹>
 ech_mh_lines() {
-  local c
   if ech_for "$1"; then
-    c=$(ech_cfg)
     printf '    ech-opts:\n      enable: true\n'
-    [ -n "$c" ] && printf '      config: %s\n' "$c"
   else
     printf '    client-fingerprint: %s\n' "$2"
   fi
   return 0
+}
+
+# Mihomo 的 DNS 段：只有开了 ECH 的那些名字改用 DoH 查，其余照旧用系统的。
+# 从代理片段里找，合并多台机器的订阅时也能覆盖别的机器的子域名
+ech_mh_dns() { # <代理片段文件>
+  local h
+  h=$(awk '/^  - name:/{sn=""} /^    servername:/{gsub(/"/, "", $2); sn=$2} /^    ech-opts:/{if (sn != "") print sn}' "$1" | sort -u)
+  [ -n "$h" ] || return 0
+  printf 'dns:\n  enable: true\n  ipv6: true\n  nameserver:\n    - system\n  nameserver-policy:\n'
+  printf '%s\n' "$h" | while IFS= read -r n; do printf '    "%s": %s\n' "$n" "$ECH_DOH"; done
 }
 
 # 通用链接的参数，已转义

@@ -130,6 +130,7 @@ wrap_mihomo() { # <节点名文件> <代理片段文件>
   echo "mixed-port: 7890"
   echo "mode: rule"
   echo "ipv6: true"
+  ech_mh_dns "$2"
   echo "proxies:"
   cat "$2"
   echo "proxy-groups:"

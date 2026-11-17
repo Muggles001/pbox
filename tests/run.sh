@@ -444,9 +444,9 @@ d=[t for t in o if t.endswith(\"WS-TLS\")]
 ok=len(c)==2 and len(d)==1
 ok=ok and all(o[t][\"tls\"][\"ech\"][\"config\"][1]==\"AEX+t/s=\" and \"utls\" not in o[t][\"tls\"] for t in c)
 ok=ok and \"ech\" not in o[d[0]][\"tls\"] and o[d[0]][\"tls\"][\"utls\"][\"enabled\"]
-sys.exit(not ok)' '$(E)/nodes/sing-box.json' && m='$(E)/nodes/mihomo.yaml' && [ \$(grep -c 'config: AEX+t/s=' \$m) = 2 ] && grep -q 'client-fingerprint' \$m && l='$(E)/nodes/links.txt' && [ \$(grep -c '&ech=c.example.com%2Bhttps%3A%2F%2F1.1.1.1%2Fdns-query#' \$l) = 2 ] && ! grep 'WS-TLS\$' \$l | grep -q 'ech='"
+sys.exit(not ok)' '$(E)/nodes/sing-box.json' && m='$(E)/nodes/mihomo.yaml' && [ \$(grep -c 'ech-opts:' \$m) = 2 ] && ! grep -q 'config: ' \$m && grep -q 'client-fingerprint' \$m && grep -qx '    \"c.example.com\": https://1.1.1.1/dns-query' \$m && [ \$(grep -c 'nameserver-policy' \$m) = 1 ] && l='$(E)/nodes/links.txt' && [ \$(grep -c '&ech=c.example.com%2Bhttps%3A%2F%2F1.1.1.1%2Fdns-query#' \$l) = 2 ] && ! grep 'WS-TLS\$' \$l | grep -q 'ech='"
 check "取不到 ECH 配置时让客户端自己查，体检报错" bash -c "PBOX_TEST_ECH= bash dist/pbox.sh site ech on --yes && grep -q '\"ech\": {\"enabled\": true}' '$(E)/nodes/sing-box.json' && python3 -m json.tool '$(E)/nodes/sing-box.json' >/dev/null && grep -q 'ech-opts' '$(E)/nodes/mihomo.yaml' && ! grep -q 'config: ' '$(E)/nodes/mihomo.yaml' && PBOX_TEST_ECH= bash dist/pbox.sh doctor 2>&1 | grep -q '取不到 c.example.com 的 ECH'"
-check "关掉 ECH 后恢复原样" bash -c "bash dist/pbox.sh site ech off --yes && ! grep -q '\"ech\"' '$(E)/nodes/sing-box.json' && ! grep -q 'ech-opts' '$(E)/nodes/mihomo.yaml' && ! grep -q 'ech=' '$(E)/nodes/links.txt'"
+check "关掉 ECH 后恢复原样" bash -c "bash dist/pbox.sh site ech off --yes && ! grep -q '\"ech\"' '$(E)/nodes/sing-box.json' && ! grep -q 'ech-opts' '$(E)/nodes/mihomo.yaml' && ! grep -q '^dns:' '$(E)/nodes/mihomo.yaml' && ! grep -q 'ech=' '$(E)/nodes/links.txt'"
 check "设着子域名时不能关伪装站" bash -c "bash dist/pbox.sh del trojan --yes && bash dist/pbox.sh del vless-wstls --yes && ! bash dist/pbox.sh site off --yes"
 check "停用后分流和节点里都没有子域名" bash -c "bash dist/pbox.sh add vless-wstls --yes && bash dist/pbox.sh site cdn off --yes && ! grep -q 'c.example.com' '$(E)/generated/nginx/nginx.conf' && ! grep -q 'c.example.com' '$(E)/nodes/links.txt'"
 unset PBOX_TEST_DNS_A
