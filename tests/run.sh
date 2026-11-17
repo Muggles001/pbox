@@ -289,6 +289,7 @@ assert len(t)==len(set(t)) and any(x.startswith('JP2-') for x in t) and any(x.st
 assert sorted(o[0]['outbounds'])==sorted(x for x in t if x not in ('proxy','direct'))
 \""
 check "合并后的 Clash 配置里两台都在" bash -c "grep -q 'name: \"\\?JP-' '$PBOX_SUB_DIR/clash' && grep -q 'name: \"\\?JP2-' '$PBOX_SUB_DIR/clash'"
+check "更新后重新合并订阅，即使本机节点没变" bash -c "echo stale >'$PBOX_SUB_DIR/clash' && PBOX_ROOT='$A' bash dist/pbox.sh post-update --yes && grep -q 'name: \"\\?JP2-' '$PBOX_SUB_DIR/clash'"
 check "同名用户在两台机器上共用一个订阅" bash -c "
   PBOX_ROOT='$A' bash dist/pbox.sh user add carol --yes &&
   PBOX_ROOT='$B' bash dist/pbox.sh user add carol hysteria2 --yes &&

@@ -108,6 +108,8 @@ cmd_post_update() {
       done
     fi
     nodes_write
+    # 新版本可能改了客户端配置的写法，而本机片段不一定变，所以无论如何重新合并一次
+    sub_push force || warn "$(t sub_push_fail)"
     say "$(t upd_done)"
     return 0
   fi
