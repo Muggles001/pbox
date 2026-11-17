@@ -602,7 +602,10 @@ cmd_firewall() {
   need_root
   need_installed
   detect_sys
-  [ "$(fw_backend)" = none ] && { note "$(t d_fw_none)"; return 0; }
+  if [ "$(fw_backend)" = none ]; then
+    if [ -n "$(fw_other)" ]; then fw_manual_note; else note "$(t d_fw_none)"; fi
+    return 0
+  fi
   fw_sync
 }
 

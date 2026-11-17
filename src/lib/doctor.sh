@@ -45,6 +45,10 @@ d_firewall() {
   local be p rc=0
   be=$(fw_backend)
   if [ "$be" = none ]; then
+    if [ -n "$(fw_other)" ]; then
+      bad "$(t fw_manual "$(fw_other)" "$(ports_wanted | tr '\n' ' ' | sed 's/ $//')")"
+      return 1
+    fi
     note "$(t d_fw_none)"
     return 0
   fi

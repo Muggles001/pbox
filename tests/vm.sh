@@ -126,6 +126,23 @@ else
     ufw --force disable >/dev/null
     ufw delete allow 22/tcp >/dev/null
   fi
+
+  # 服务商镜像常见的 iptables 兜底拒绝：pbox 不改它，只列出要手动放行的端口。保住本机回环、已建立的连接和 SSH
+  if [ "${PBOX_VM_UFW:-0}" = 1 ] && command -v iptables >/dev/null && ! { command -v ufw >/dev/null && ufw status | grep -q '^Status: active'; }; then
+    echo "iptables 兜底拒绝"
+    iptables -I INPUT 1 -i lo -j ACCEPT
+    iptables -I INPUT 2 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    iptables -I INPUT 3 -p tcp --dport 22 -j ACCEPT
+    iptables -A INPUT -j REJECT
+    $P install --yes >/dev/null 2>&1
+    check "体检指出只自动处理 ufw、firewalld，并列出端口" bash -c "o=\$($P doctor 2>&1); echo \"\$o\" | grep -q 'iptables 里有拦截入站的规则' && echo \"\$o\" | grep -q '$(port_of reality-vision)/tcp'"
+    check "没有改动 iptables" bash -c "[ \$(iptables -S INPUT | grep -c -- '-j REJECT') = 1 ] && ! iptables -S INPUT | grep -q 'dport $(port_of reality-vision)'"
+    $P uninstall --yes >/dev/null 2>&1
+    iptables -D INPUT -j REJECT
+    iptables -D INPUT -p tcp --dport 22 -j ACCEPT
+    iptables -D INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    iptables -D INPUT -i lo -j ACCEPT
+  fi
 fi
 
 echo
