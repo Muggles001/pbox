@@ -35,8 +35,8 @@ compact_pick() { # <用户>
         break
       done
     done
-    # 开了 ECH 时 Clash 只有 XHTTP 能加密握手，所以它也列上
-    if ech_on && proto_enabled vless-xhttp && user_has "$1" vless-xhttp; then
+    # 开了 ECH 时 Clash 只有 XHTTP 能加密握手；开了上下行分离时分离节点也在 XHTTP 里。这两种情况都把它列上
+    if { ech_on || xhttp_split_on; } && proto_enabled vless-xhttp && user_has "$1" vless-xhttp; then
       case " $rec " in *" vless-xhttp "*) ;; *) rec="$rec vless-xhttp" ;; esac
     fi
   fi
@@ -59,7 +59,7 @@ hosts_compact() {
   compact_on || { cat; return 0; }
   awk -F'|' -v dual="$(t label_dual)" '
     { l = $1; g = "all"
-      if (l ~ /^Fixed/) g = "Fixed"; else if (l ~ /^Temp/) g = "Temp"
+      if (l ~ /^Fixed/) g = "Fixed"; else if (l ~ /^Temp/) g = "Temp"; else if (l == "Split") g = "Split"
       if (l ~ /-Pref$/) s = 1
       else if (l == "CDN" || l == "Fixed" || l == "Temp") s = 2
       else if (l ~ /^Via-/) s = 5
@@ -88,7 +88,7 @@ node_each() {
       } | hosts_compact | while IFS= read -r line; do
         label="${line%%|*}" host="${line#*|}"
         # 第三段是可选的附加信息，协议模块通过 NODE_EXTRA 读取；第四段是经中转时的端口对应关系
-        NODE_EXTRA="" NODE_VIA=""
+        NODE_EXTRA="" NODE_VIA="" NODE_LABEL="$label"
         case "$host" in *"|"*) NODE_EXTRA="${host#*|}" host="${host%%|*}" ;; esac
         case "$NODE_EXTRA" in *"|"*) NODE_VIA="${NODE_EXTRA#*|}" NODE_EXTRA="${NODE_EXTRA%%|*}" ;; esac
         name="$(pmeta "$id" short)-$label"

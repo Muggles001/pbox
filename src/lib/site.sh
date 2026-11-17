@@ -451,7 +451,7 @@ d_cdn() {
   esac
 }
 
-# pbox site [status|on|off|source <builtin|https://网址>|cdn <子域名|off>|ech [on|off]]
+# pbox site [status|on|off|source <builtin|https://网址>|cdn <子域名|off>|ech [on|off]|split [on|off]]
 cmd_site() {
   case "${1:-status}" in
     on) site_enable ;;
@@ -459,6 +459,7 @@ cmd_site() {
     source) site_set_source "${2:-}" ;;
     cdn) if [ "${2:-}" = off ]; then site_cdn_off; else site_cdn_set "${2:-}"; fi ;;
     ech) cmd_ech "${2:-}" ;;
+    split) cmd_xhttp_split "${2:-}" ;;
     status) need_root; need_installed; site_status ;;
     *) cmd_help ;;
   esac

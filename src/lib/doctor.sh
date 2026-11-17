@@ -208,7 +208,7 @@ cmd_doctor() {
   local report="${1:-}" pass=0 total=0 out fn id all
   need_installed
   out=$(mktemp)
-  all="d_services d_config d_ports d_firewall d_dns d_time d_egress d_domain d_site d_cdn d_ech d_relay"
+  all="d_services d_config d_ports d_firewall d_dns d_time d_egress d_domain d_site d_cdn d_ech d_xhttp_split d_relay"
   for id in $(protos_enabled); do all="$all proto:$id"; done
   [ "$(kv_get "$STATE/outbound.env" warp off)" = on ] && all="$all d_warp"
   selfsub_on && all="$all d_selfsub"

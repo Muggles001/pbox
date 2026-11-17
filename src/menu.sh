@@ -291,6 +291,7 @@ menu_domain() {
     printf "$T_m_fmt" 7 "$(t md_source)" "${C_D}[$(site_source)] $(t md_source_d)${C_0}"
     printf "$T_m_fmt" 8 "$(t md_cdn)" "${C_D}[$(gget cdn_host "$(t off)")] $(t md_cdn_d)${C_0}"
     [ -n "$(gget cdn_host)" ] && printf "$T_m_fmt" 9 "ECH" "${C_D}[$(onoff "$(gget ech 0)")] $(t md_ech_d)${C_0}"
+    [ -n "$(gget cdn_host)" ] && printf "$T_m_fmt" 10 "$(t split_title)" "${C_D}[$(onoff "$(gget xhttp_split 0)")] $(t md_split_d)${C_0}"
     item 0 m_back m_blank
     choose
     case "$REPLY" in
@@ -325,6 +326,15 @@ menu_domain() {
         elif [ -n "$(gget cdn_host)" ]; then
           say " $(t ech_intro)"
           confirm " $(t ech_on_q)" && run cmd_site ech on
+        fi
+        ;;
+      10)
+        if [ "$(gget xhttp_split 0)" = 1 ]; then
+          run cmd_site split off
+        elif [ -n "$(gget cdn_host)" ]; then
+          say " $(t split_intro)"
+          # 缺前提时直接说缺什么，不先问要不要开
+          if [ -n "$(xhttp_split_missing)" ]; then run cmd_site split on; else confirm " $(t split_on_q)" && run cmd_site split on; fi
         fi
         ;;
       *) return 0 ;;
