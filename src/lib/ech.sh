@@ -4,10 +4,14 @@
 #
 # Cloudflare 大约每一两个小时换一次密钥，客户端取得加密配置的方式按各自能否重试来定：
 # - sing-box：生成配置时写入当前的。过期后按服务器给的新配置重试，但开着 uTLS 时不会，所以这些节点不用 uTLS 指纹
-# - Mihomo、Xray（通用链接）：拿着过期配置不会重试，只能连接时自己查，用 DoH 查，
-#   因为国内的普通 DNS 查不到 HTTPS 记录
+# - Mihomo、Xray（通用链接）：拿着过期配置不会重试，只能连接时自己查，用 DoH 查。
+#   客户端在国内时 1.1.1.1 常常连不上，所以客户端用国内的 DoH：Mihomo 同时问几家、取先回来的，
+#   Xray 只能写一个。子域名本来就要经系统 DNS 解析地址，交给国内的 DoH 查不多泄露什么
 
+# 服务器在境外，取配置用 Cloudflare 自己的
 ECH_DOH="https://1.1.1.1/dns-query"
+ECH_DOH_XRAY="https://223.5.5.5/dns-query"
+ECH_DOH_MIHOMO="[https://223.5.5.5/dns-query, https://1.12.12.12/dns-query, https://1.1.1.1/dns-query]"
 
 ech_on() { [ "$(gget ech 0)" = 1 ] && [ -n "$(gget cdn_host)" ]; }
 
@@ -70,18 +74,18 @@ ech_mh_dns() { # <代理片段文件>
   h=$(awk '/^  - name:/{sn=""} /^    servername:/{gsub(/"/, "", $2); sn=$2} /^    ech-opts:/{if (sn != "") print sn}' "$1" | sort -u)
   [ -n "$h" ] || return 0
   printf 'dns:\n  enable: true\n  ipv6: true\n  nameserver:\n    - system\n  nameserver-policy:\n'
-  printf '%s\n' "$h" | while IFS= read -r n; do printf '    "%s": %s\n' "$n" "$ECH_DOH"; done
+  printf '%s\n' "$h" | while IFS= read -r n; do printf '    "%s": %s\n' "$n" "$ECH_DOH_MIHOMO"; done
 }
 
 # 通用链接的参数，已转义
 ech_link_param() { # <名字>
-  ech_for "$1" && printf '&ech=%s' "$(printf '%s+%s' "$1" "$ECH_DOH" | sed 's#:#%3A#g; s#/#%2F#g; s#+#%2B#g')"
+  ech_for "$1" && printf '&ech=%s' "$(printf '%s+%s' "$1" "$ECH_DOH_XRAY" | sed 's#:#%3A#g; s#/#%2F#g; s#+#%2B#g')"
   return 0
 }
 
 # Xray 自测用的 tlsSettings 片段
 ech_xray_field() { # <名字>
-  ech_for "$1" && printf ', "echConfigList": "%s+%s"' "$1" "$ECH_DOH"
+  ech_for "$1" && printf ', "echConfigList": "%s+%s"' "$1" "$ECH_DOH_XRAY"
   return 0
 }
 
